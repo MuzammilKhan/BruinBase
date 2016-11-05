@@ -133,7 +133,59 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 RC SqlEngine::load(const string& table, const string& loadfile, bool index)
 {
   /* your code here */
+  RecordFile rf;   // RecordFile containing the table
+  RecordId   rid;  // record cursor for table scanning
+  ifstream ifs; //input loadfile filestream
 
+  //exit status variables
+  RC     rc;
+
+  //Insertion variables
+  int    key;     
+  string value;
+  int    count; //line number in load file
+  string line;
+
+  // open the table file
+  if ((rc = rf.open(table + ".tbl", 'r')) < 0) {
+    fprintf(stderr, "Error: table %s does not exist\n", table.c_str());
+    return rc;
+  }
+
+  //open loadfile
+  try {
+    ifs.open(loadfile.c_str(), ifstream::in);
+  } catch(...) {
+    return INPUT_FILE_OPEN_FAILED;
+  }
+
+  //insert data 
+  while(! ifs.eof()) {
+    getline(ifs, line);
+    if(line == "")
+      break;
+
+    if((rc = parseLoadLine(line, key, value)) < 0) {
+      fprintf(stderr, "Error: Unable to parse input file %s at line %d\n", loadfile.c_str(), count);
+      rf.close();
+      ifs.close();
+      return rc;
+    }
+
+    if((rc = rf.append(key,value,rid)) < 0) {
+      fprintf(stderr, "Error: Unable to insert data to table %s at line %d of %s\n", table.c_str(), count, loadfile.c_str());
+      rf.close();
+      ifs.close();
+      return rc;
+    }
+
+
+    count++;
+  }
+
+
+  rf.close();
+  ifs.close();
   return 0;
 }
 
