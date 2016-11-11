@@ -2,6 +2,11 @@
 
 using namespace std;
 
+BTLeafNode::BTLeafNode(){
+	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
+														//Do we want to use -1 or 0?
+}
+
 /*
  * Read the content of the node from the page pid in the PageFile pf.
  * @param pid[IN] the PageId to read
@@ -9,7 +14,7 @@ using namespace std;
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTLeafNode::read(PageId pid, const PageFile& pf)
-{ return 0; }
+{ return pf.read(pid, buffer); }
     
 /*
  * Write the content of the node to the page pid in the PageFile pf.
@@ -18,14 +23,28 @@ RC BTLeafNode::read(PageId pid, const PageFile& pf)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTLeafNode::write(PageId pid, PageFile& pf)
-{ return 0; }
+{ return pf.write(pid, buffer); }
 
 /*
  * Return the number of keys stored in the node.
  * @return the number of keys in the node
  */
 int BTLeafNode::getKeyCount()
-{ return 0; }
+{ 
+	int intSize = sizeof(int); 
+	int pairSize = intSize + sizeof(RecordId);
+	int keyCount = 0;
+	char* bufPtr = buffer;
+	int i = 0;
+	int key;
+
+	for(; i < PageFile::PAGE_SIZE < i += pairSize) {
+		memcpy(&key, bufPtr, intSize);
+		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
+		keyCount++;
+		bufPtr += pairSize;
+	}
+	return keyCount; }
 
 /*
  * Insert a (key, rid) pair to the node.
@@ -96,7 +115,7 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::read(PageId pid, const PageFile& pf)
-{ return 0; }
+{ return pf.read(pid, buffer); }
     
 /*
  * Write the content of the node to the page pid in the PageFile pf.
@@ -105,14 +124,27 @@ RC BTNonLeafNode::read(PageId pid, const PageFile& pf)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::write(PageId pid, PageFile& pf)
-{ return 0; }
+{ return pf.write(pid,buffer); }
 
 /*
  * Return the number of keys stored in the node.
  * @return the number of keys in the node
  */
-int BTNonLeafNode::getKeyCount()
-{ return 0; }
+int BTNonLeafNode::getKeyCount(){
+	int intSize = sizeof(int); 
+	int pairSize = intSize + sizeof(RecordId);
+	int keyCount = 0;
+	char* bufPtr = buffer + pairSize;
+	int i = pairSize;
+	int key;
+
+	for(; i < PageFile::PAGE_SIZE < i += pairSize) {
+		memcpy(&key, bufPtr, intSize);
+		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
+		keyCount++;
+		bufPtr += pairSize;
+	}
+	return keyCount;  }
 
 
 /*
