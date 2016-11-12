@@ -88,7 +88,8 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	memcpy(buffer, tmpBuf, PageFile::PAGE_SIZE);
 	free(tmpBuf);
 
-	return 0; }
+	return 0;
+}
 
 /*
  * Insert the (key, rid) pair to the node
@@ -132,7 +133,8 @@ RC BTLeafNode::locate(int searchKey, int& eid)
 		}
 	}
 	eid = getKeyCount();
-	return 0; }
+	return 0; 
+}
 
 /*
  * Read the (key, rid) pair from the eid entry.
@@ -142,7 +144,20 @@ RC BTLeafNode::locate(int searchKey, int& eid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTLeafNode::readEntry(int eid, int& key, RecordId& rid)
-{ return 0; }
+{ 
+	if (eid < 0 || eid > getKeyCount() ) { //CHECK: should this be >= or > ??
+		return RC_NO_SUCH_RECORD;
+	}
+	int intSize = sizeof(int);
+	int pairSize = sizeof(int) + sizeof(RecordId);
+	char* bufPtr = buffer;
+	int pairLocation = eid * pairSize;
+
+	memcpy(&key, bufPtr + pairLocation, intSize);
+	memcpy(&rid, bufPtr + pairSize + intSize; sizeof(rid));
+
+	return 0;
+}
 
 /*
  * Return the pid of the next slibling node.
