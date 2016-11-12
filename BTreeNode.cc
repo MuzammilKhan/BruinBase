@@ -38,11 +38,10 @@ int BTLeafNode::getKeyCount()
 	int i = 0;
 	int key;
 
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize) {
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize ) {
 		memcpy(&key, bufPtr, intSize);
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
-		bufPtr += pairSize;
 	}
 	return keyCount; }
 
@@ -68,10 +67,10 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	//assuming keys are in decending order, makes checking with -1 easy
 	int i = 0;
 	int keyTmp;
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize) {	
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
 		if(key == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
-		bufPtr += pairSize;
+
 	}
 
 
@@ -117,7 +116,23 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
  * @return 0 if searchKey is found. Otherwise return an error code.
  */
 RC BTLeafNode::locate(int searchKey, int& eid)
-{ return 0; }
+{ 
+	int intSize = sizeof(int);
+	int pairSize = sizeof(int) + sizeof(RecordId);
+	char* bufPtr = buffer;
+	int i = 0;
+	int condition = getKeyCount()  * pairSize;
+	int key;
+
+	for(; i < condition; i += pairSize , bufPtr += pairSize) {
+		memcpy(&key, bufPtr, intSize);
+		if( key >= searchKey) {
+			eid = i/pairSize;
+			return 0;
+		}
+	}
+	eid = getKeyCount();
+	return 0; }
 
 /*
  * Read the (key, rid) pair from the eid entry.
@@ -174,11 +189,10 @@ int BTNonLeafNode::getKeyCount(){
 	int i = pairSize;
 	int key;
 
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize) {
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize, 	bufPtr += pairSize) {
 		memcpy(&key, bufPtr, intSize);
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
-		bufPtr += pairSize;
 	}
 	return keyCount;  }
 
