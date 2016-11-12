@@ -38,7 +38,7 @@ int BTLeafNode::getKeyCount()
 	int i = 0;
 	int key;
 
-	for(; i < PageFile::PAGE_SIZE < i += pairSize) {
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize) {
 		memcpy(&key, bufPtr, intSize);
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
@@ -53,7 +53,43 @@ int BTLeafNode::getKeyCount()
  * @return 0 if successful. Return an error code if the node is full.
  */
 RC BTLeafNode::insert(int key, const RecordId& rid)
-{ return 0; }
+{ 
+	int pageIdSize = sizeof(PageId);
+	int intSize = sizeof(int);
+	PageId nextPtr;
+	char* bufPtr = buffer;
+	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);
+
+	int pairSize = sizeof(int) + sizeof(RecordId);
+	if(getKeyCount() + 1 > (bufPtr + PageFile::PAGE_SIZE - pageIdSize)/pageIdSize ) { 
+		return RC_NODE_FULL;
+	}
+
+	//assuming keys are in decending order, makes checking with -1 easy
+	int i = 0;
+	int keyTmp;
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize) {	
+		memcpy(&keyTmp, bufPtr, intSize);
+		if(key == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
+		bufPtr += pairSize;
+	}
+
+
+	//Copy the the buffer into the tmp buffer until the point where we stopped in the loop above
+	// Insert key,value pair and then the rest of the buffer into the tmp buffer
+	//Now copy the whole tmp buffer back and overwrite the buffer
+	int keyCount = getKeyCount();
+	char* tmpBuf = (char*) malloc(PageFile::PAGE_SIZE);
+	std::fill(tmpBuf, tmpBuf+ PageFile::PAGE_SIZE, -1);
+	memcpy(tmpBuf, buffer, i);
+	memcpy(tmpBuf + i, &key, intSize);
+	memcpy(tmpBuf + i + intSize, &rid, sizeof(RecordId));
+	memcpy(tmpBuf + i + pairSize, buffer + i, keyCount * pairSize - i);
+	memcpy(tmpBuf + PageFile::PAGE_SIZE - pageIdSize, &nextPtr, pageIdSize);
+	memcpy(buffer, tmpBuf, PageFile::PAGE_SIZE);
+	free(tmpBuf);
+
+	return 0; }
 
 /*
  * Insert the (key, rid) pair to the node
@@ -138,7 +174,7 @@ int BTNonLeafNode::getKeyCount(){
 	int i = pairSize;
 	int key;
 
-	for(; i < PageFile::PAGE_SIZE < i += pairSize) {
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize) {
 		memcpy(&key, bufPtr, intSize);
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
