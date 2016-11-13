@@ -103,7 +103,45 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
  */
 RC BTLeafNode::insertAndSplit(int key, const RecordId& rid, 
                               BTLeafNode& sibling, int& siblingKey)
-{ return 0; }
+{ 
+	if(!(getKeyCount() + 1 > (bufPtr + PageFile::PAGE_SIZE - pageIdSize)/pageIdSize )) { 
+		return RC_INVALID_FILE_FORMAT; //trying to split when there is no overflow results in bad format
+	}
+	if(sibling.getKeyCount() != 0) {
+		return RC_INVALID_ATTRIBUTE; //sibling must be empty, if it isnt this is invalid
+	}	
+
+	//SPLITTING CODE
+	int pageIdSize = sizeof(PageId);
+	int intSize = sizeof(int);
+	PageId nextPtr;
+	char* bufPtr = buffer;
+	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);	
+
+	int keepKeysCount = (int) ceil(((float) getKeyCount() + 1)/2); //number of keys to keep in this node
+	int splitIndex = keepKeysCount*pairSize; //index to split at
+
+	//copy everything past the split index to the sibling
+	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
+	sibling.setNextNodePtr(nextPtr); //Is this right? Or should it be the other way around?
+
+	//clear pairs that we copied over to sibling from this node
+	std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE - pageIdSize, -1);
+
+	//INSERTION CODE
+	memcpy(&siblingKey, sibling.buffer, intSize); //first key in sibling
+	if(key >= siblingKey) { //figure out whether to put key here or in sibling
+		sibling.insert(key, rid);
+	} else {
+		insert(key,rid);
+	}
+	RecordId siblingRid; //We need to intialize the sid and pid of sibling's rid
+	siblingRid.sid = -1;
+	siblingRid.pid = -1;
+	memcpy(&siblingRid, sibling.buffer + intSize), sizeof(RecordId);
+
+	return 0; 
+}
 
 /**
  * If searchKey exists in the node, set eid to the index entry
