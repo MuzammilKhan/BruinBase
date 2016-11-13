@@ -185,6 +185,11 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 	return 0; 
 }
 
+BTNonLeafNode::BTNonLeafNode(){
+	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
+														//Do we want to use -1 or 0?
+}
+
 /*
  * Read the content of the node from the page pid in the PageFile pf.
  * @param pid[IN] the PageId to read
