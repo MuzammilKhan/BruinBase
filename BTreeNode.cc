@@ -104,7 +104,12 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 RC BTLeafNode::insertAndSplit(int key, const RecordId& rid, 
                               BTLeafNode& sibling, int& siblingKey)
 { 
-	if(!(getKeyCount() + 1 > (bufPtr + PageFile::PAGE_SIZE - pageIdSize)/pageIdSize )) { 
+	int intSize = sizeof(int); 
+	int pairSize = intSize + sizeof(RecordId);
+	int pageIdSize = sizeof(PageId);
+
+
+	if(!(getKeyCount() + 1 > (PageFile::PAGE_SIZE - pageIdSize)/pairSize )) { 
 		return RC_INVALID_FILE_FORMAT; //trying to split when there is no overflow results in bad format
 	}
 	if(sibling.getKeyCount() != 0) {
@@ -112,8 +117,7 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	}	
 
 	//SPLITTING CODE
-	int pageIdSize = sizeof(PageId);
-	int intSize = sizeof(int);
+
 	PageId nextPtr;
 	char* bufPtr = buffer;
 	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);	
