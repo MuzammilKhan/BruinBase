@@ -60,16 +60,16 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);
 
 	int pairSize = sizeof(int) + sizeof(RecordId);
-	if(getKeyCount() + 1 > (bufPtr + PageFile::PAGE_SIZE - pageIdSize)/pageIdSize ) { 
+	if(getKeyCount() + 1 > (PageFile::PAGE_SIZE - pageIdSize)/pairSize ) { 
 		return RC_NODE_FULL;
 	}
 
-	//assuming keys are in decending order, makes checking with -1 easy
+	//assuming keys are in ascending order, makes checking with -1 easy
 	int i = 0;
 	int keyTmp;
 	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
-		if(key == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
+		if(keyTmp == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
 
 	}
 
@@ -255,11 +255,16 @@ RC BTNonLeafNode::write(PageId pid, PageFile& pf)
  * @return the number of keys in the node
  */
 int BTNonLeafNode::getKeyCount(){
+
+	// representation:
+	// [pid | key | pid | ... | key | pid]
+
 	int intSize = sizeof(int); 
-	int pairSize = intSize + sizeof(RecordId);
+	int pageIdSize = sizeof(PageId);
+	int pairSize = intSize + pageIdSize;
 	int keyCount = 0;
-	char* bufPtr = buffer + pairSize;
-	int i = pairSize;
+	char* bufPtr = buffer + pageIdSize;
+	int i = pageIdSize;
 	int key;
 
 	for(; i < PageFile::PAGE_SIZE ; i += pairSize, 	bufPtr += pairSize) {
@@ -267,7 +272,8 @@ int BTNonLeafNode::getKeyCount(){
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
 	}
-	return keyCount;  }
+	return keyCount;  
+}
 
 
 /*
@@ -277,7 +283,47 @@ int BTNonLeafNode::getKeyCount(){
  * @return 0 if successful. Return an error code if the node is full.
  */
 RC BTNonLeafNode::insert(int key, PageId pid)
-{ return 0; }
+{ 
+	// representation:
+	// [pid | key | pid | ... | key | pid]
+
+	int pageIdSize = sizeof(PageId);
+	int intSize = sizeof(int);
+	PageId nextPtr;
+	char* bufPtr = buffer;
+	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);
+
+	int pairSize = intSize + pageIdSize;
+	int keyCount = getKeyCount();
+	if(keyCount + 1 > (PageFile::PAGE_SIZE - pageIdSize)/pairSize ) { 
+		return RC_NODE_FULL;
+	}
+
+	//assuming keys are in ascending order, makes checking with -1 easy
+	int i = pageIdSize;
+	int keyTmp;
+	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize) {	
+		memcpy(&keyTmp, bufPtr, intSize);
+		if(keyTmp == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
+
+	}
+
+
+	//Copy the the buffer into the tmp buffer until the point where we stopped in the loop above
+	// Insert key,value pair and then the rest of the buffer into the tmp buffer
+	//Now copy the whole tmp buffer back and overwrite the buffer
+	char* tmpBuf = (char*) malloc(PageFile::PAGE_SIZE);
+	std::fill(tmpBuf, tmpBuf+ PageFile::PAGE_SIZE, -1);
+	memcpy(tmpBuf, buffer, i);
+	memcpy(tmpBuf + i, &key, intSize);
+	memcpy(tmpBuf + i + intSize, &pid, pageIdSize);
+	memcpy(tmpBuf + i + pairSize, buffer + i, keyCount * pairSize - i);
+	memcpy(tmpBuf + PageFile::PAGE_SIZE - pageIdSize, &nextPtr, pageIdSize);
+	memcpy(buffer, tmpBuf, PageFile::PAGE_SIZE);
+	free(tmpBuf);
+
+	return 0;
+}
 
 /*
  * Insert the (key, pid) pair to the node
