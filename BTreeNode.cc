@@ -184,7 +184,7 @@ RC BTLeafNode::locate(int searchKey, int& eid)
 		        eid = i/pairSize;
 		} else {}
 	}
-	eid = getKeyCount();
+
 	return RC_NO_SUCH_RECORD; 
 }
 
