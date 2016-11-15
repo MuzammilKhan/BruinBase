@@ -175,13 +175,17 @@ RC BTLeafNode::locate(int searchKey, int& eid)
 
 	for(; i < condition; i += pairSize , bufPtr += pairSize) {
 		memcpy(&key, bufPtr, intSize);
-		if( key >= searchKey) {
+		if( key == searchKey) {
 			eid = i/pairSize;
 			return 0;
-		}
+		} else if( key == -1) {
+		        break;
+		} else if (key < searchKey) {
+		        eid = i/pairSize;
+		} else {}
 	}
 	eid = getKeyCount();
-	return 0; 
+	return RC_NO_SUCH_RECORD; 
 }
 
 /*
