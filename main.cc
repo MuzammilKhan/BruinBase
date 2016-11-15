@@ -9,7 +9,11 @@
  
 #include "Bruinbase.h"
 #include "SqlEngine.h"
+#include "BTreeNode.h"
 #include <cstdio>
+#include <iostream>
+
+using namespace std;
 
 int main()
 {
