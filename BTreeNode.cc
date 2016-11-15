@@ -235,7 +235,8 @@ void BTLeafNode::print()
 	int pairSize = sizeof(RecordId) + sizeof(int);
 	
 	char* temp = buffer;
-	
+	cout << "L ";
+
 	for(int i=0; i<getKeyCount()*pairSize; i+=pairSize)
 	{
 		int insideKey;
@@ -243,10 +244,10 @@ void BTLeafNode::print()
 		
 		cout << insideKey << " ";
 		
-		temp += pairSize; //Jump temp over to the next key
+		temp += pairSize; 
 	}
 	
-	cout << "" << endl;
+	//cout << "" << endl;
 }
 
 BTNonLeafNode::BTNonLeafNode(PageId pid){
@@ -481,18 +482,18 @@ void BTNonLeafNode::print()
 	int pairSize = sizeof(PageId) + sizeof(int);
 	
 	//Skip the first 8 offset bytes, since there's no key there
-	char* temp = buffer+8;
-	
-	for(int i=8; i<getKeyCount()*pairSize+8; i+=pairSize)
+	char* temp = buffer;
+
+	cout << "N ";
+	for(int i=0; i<getKeyCount()*pairSize; i+=pairSize)
 	{
 		int insideKey;
 		memcpy(&insideKey, temp, sizeof(int)); //Save the current key inside buffer as insideKey
 
 		cout << insideKey << " ";
 		
-		//Otherwise, searchKey is greater than or equal to insideKey, so we keep checking
 		temp += pairSize; //Jump temp over to the next key
 	}
 	
-	cout << "" << endl;	
+	//cout << "" << endl;	
 }
