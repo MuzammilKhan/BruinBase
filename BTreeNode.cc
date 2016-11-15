@@ -74,7 +74,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	int keyTmp;
 	for(; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
-		if(keyTmp == -1 || (key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
+		if(keyTmp == -1 || !(key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
 
 	}
 
@@ -452,7 +452,7 @@ RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
 		}
 
 		// return pid to left
-		if (searchKey > keyTmp) {
+		if (keyTmp > searchKey) {
 			memcpy(&pid, bufPtr - pageIdSize, pageIdSize);
 			return 0;
 		}
@@ -491,7 +491,7 @@ void BTNonLeafNode::print()
 	int pairSize = sizeof(PageId) + sizeof(int);
 	
 	//Skip the first 8 offset bytes, since there's no key there
-	char* temp = buffer;
+	char* temp = buffer + sizeof(PageId);
 
 	cout << "N ";
 	for(int i=0; i<getKeyCount()*pairSize; i+=pairSize)
