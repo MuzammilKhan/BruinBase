@@ -6,10 +6,10 @@
 
 using namespace std;
 
-BTLeafNode::BTLeafNode(PageId pid){
+BTLeafNode::BTLeafNode(){//(PageId pid){
 	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
 														//Do we want to use -1 or 0?
-	m_pid = pid;
+	//m_pid = pid;
 }
 
 /*
@@ -133,7 +133,7 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	//copy everything past the split index to the sibling
 	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
 	sibling.setNextNodePtr(nextPtr); 
-	setNextNodePtr(sibling.m_pid);
+	//setNextNodePtr(sibling.m_pid);
 
 	//clear pairs that we copied over to sibling from this node
 	std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE - pageIdSize, -1);
@@ -254,10 +254,10 @@ void BTLeafNode::print()
 	//cout << "" << endl;
 }
 
-BTNonLeafNode::BTNonLeafNode(PageId pid){
+BTNonLeafNode::BTNonLeafNode(){ //(PageId pid){
 	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
 														//Do we want to use -1 or 0?
-	m_pid = pid;
+	//m_pid = pid;
 }
 
 /*
