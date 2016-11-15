@@ -206,7 +206,7 @@ RC BTLeafNode::readEntry(int eid, int& key, RecordId& rid)
 	int pairLocation = eid * pairSize;
 
 	memcpy(&key, bufPtr + pairLocation, intSize);
-	memcpy(&rid, bufPtr + pairSize + intSize, sizeof(rid));
+	memcpy(&rid, bufPtr + pairLocation + intSize, sizeof(rid));
 
 	return 0;
 }
