@@ -36,6 +36,7 @@ RC BTLeafNode::write(PageId pid, PageFile& pf)
  */
 int BTLeafNode::getKeyCount()
 { 
+	int pageIdSize = sizeof(PageId);
 	int intSize = sizeof(int); 
 	int pairSize = intSize + sizeof(RecordId);
 	int keyCount = 0;
@@ -43,7 +44,7 @@ int BTLeafNode::getKeyCount()
 	int i = 0;
 	int key;
 
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize ) {
+	for(; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, bufPtr += pairSize ) {
 		memcpy(&key, bufPtr, intSize);
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
@@ -299,7 +300,7 @@ int BTNonLeafNode::getKeyCount(){
 	int i = pageIdSize;
 	int key;
 
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize, 	bufPtr += pairSize) {
+	for(; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, 	bufPtr += pairSize) {
 		memcpy(&key, bufPtr, intSize);
 		if(key == -1) break;  //If hit an element in the buffer we didn't set, stop counting. NOTE: change compare to -1 or 0 based off initialization
 		keyCount++;
