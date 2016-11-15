@@ -1,4 +1,8 @@
 #include "BTreeNode.h"
+#include <iostream>
+#include <cstring>
+#include <cstdlib>
+#include <cmath>
 
 using namespace std;
 
@@ -144,7 +148,7 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	RecordId siblingRid; //We need to intialize the sid and pid of sibling's rid
 	siblingRid.sid = -1;
 	siblingRid.pid = -1;
-	memcpy(&siblingRid, sibling.buffer + intSize), sizeof(RecordId);
+	memcpy(&siblingRid, sibling.buffer + intSize, sizeof(RecordId));
 
 	return 0; 
 }
@@ -198,7 +202,7 @@ RC BTLeafNode::readEntry(int eid, int& key, RecordId& rid)
 	int pairLocation = eid * pairSize;
 
 	memcpy(&key, bufPtr + pairLocation, intSize);
-	memcpy(&rid, bufPtr + pairSize + intSize; sizeof(rid));
+	memcpy(&rid, bufPtr + pairSize + intSize, sizeof(rid));
 
 	return 0;
 }
@@ -397,19 +401,20 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 		insert(key, pid);
 
 	} else if (key > first_rightkey) { // first_rightkey is median key
+		memcpy(sibling.buffer, buffer + splitIndex + intSize, pageIdSize); // pid
+		memcpy(sibling.buffer + intSize, buffer + splitIndex + pairSize, PageFile::PAGE_SIZE - splitIndex - pairSize - pageIdSize);
+		memcpy(&midKey, buffer + splitIndex, intSize); // save mid key
 
-		
+		std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE, -1);
+
+		sibling.insert(key, pid);
 
 	} else { // key is median key
-
+		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex, PageFile::PAGE_SIZE - splitIndex - pageIdSize);
+		memcpy(sibling.buffer, &pid, pageIdSize);
+		midKey = key;
+		std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE, -1);
 	}
-
-	//copy everything past the split index to the sibling
-	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
-	sibling.setNextNodePtr(nextPtr); //Is this right? Or should it be the other way around?
-
-	//clear pairs that we copied over to sibling from this node
-	std::fill(buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex, -1);
 
 	return 0;
 }
