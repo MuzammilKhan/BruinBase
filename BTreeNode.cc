@@ -229,6 +229,26 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 	return 0; 
 }
 
+void BTLeafNode::print()
+{
+	//This is the size in bytes of an entry pair
+	int pairSize = sizeof(RecordId) + sizeof(int);
+	
+	char* temp = buffer;
+	
+	for(int i=0; i<getKeyCount()*pairSize; i+=pairSize)
+	{
+		int insideKey;
+		memcpy(&insideKey, temp, sizeof(int)); //Save the current key inside buffer as insideKey
+		
+		cout << insideKey << " ";
+		
+		temp += pairSize; //Jump temp over to the next key
+	}
+	
+	cout << "" << endl;
+}
+
 BTNonLeafNode::BTNonLeafNode(PageId pid){
 	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
 														//Do we want to use -1 or 0?
@@ -364,15 +384,21 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 	int last_leftkey;
 	int first_rightkey;
 
-	memcpy(&last_leftkey, bufPtr + splitIndex - intSize, intSize);
+	memcpy(&last_leftkey, bufPtr + splitIndex - pairSize, intSize);
 	memcpy(&first_rightkey, bufPtr + splitIndex, intSize);
 
 	if (key < last_leftkey) { // last_leftkey is median key
-		memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
+		memcpy(sibling.buffer, buffer + splitIndex - pageIdSize, pageIdSize);
+		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
 		memcpy(&midKey, buffer + splitIndex - pairSize, intSize);
 
+		std::fill(buffer + splitIndex - pairSize, buffer + PageFile::PAGE_SIZE, -1); // remove copied over elements
+
+		insert(key, pid);
 
 	} else if (key > first_rightkey) { // first_rightkey is median key
+
+		
 
 	} else { // key is median key
 
@@ -380,23 +406,10 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 
 	//copy everything past the split index to the sibling
 	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
-	sibling.setNextNodePtr(nextPtr); 
-	setNextNodePtr(sibling.m_pid);
+	sibling.setNextNodePtr(nextPtr); //Is this right? Or should it be the other way around?
 
 	//clear pairs that we copied over to sibling from this node
 	std::fill(buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex, -1);
-
-	//INSERTION CODE
-	memcpy(&siblingKey, sibling.buffer, intSize); //first key in sibling
-	if(key >= siblingKey) { //figure out whether to put key here or in sibling
-		sibling.insert(key, rid);
-	} else {
-		insert(key,rid);
-	}
-	RecordId siblingRid; //We need to intialize the sid and pid of sibling's rid
-	siblingRid.sid = -1;
-	siblingRid.pid = -1;
-	memcpy(&siblingRid, sibling.buffer + intSize), sizeof(RecordId);
 
 	return 0;
 }
@@ -460,4 +473,26 @@ RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
 	memcpy(bufptr + pageIdSize + intSize, &pid2, pageIdSize);
 
 	return 0;
+}
+
+void BTNonLeafNode::print()
+{
+	//This is the size in bytes of an entry pair
+	int pairSize = sizeof(PageId) + sizeof(int);
+	
+	//Skip the first 8 offset bytes, since there's no key there
+	char* temp = buffer+8;
+	
+	for(int i=8; i<getKeyCount()*pairSize+8; i+=pairSize)
+	{
+		int insideKey;
+		memcpy(&insideKey, temp, sizeof(int)); //Save the current key inside buffer as insideKey
+
+		cout << insideKey << " ";
+		
+		//Otherwise, searchKey is greater than or equal to insideKey, so we keep checking
+		temp += pairSize; //Jump temp over to the next key
+	}
+	
+	cout << "" << endl;	
 }
