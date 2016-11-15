@@ -2,9 +2,10 @@
 
 using namespace std;
 
-BTLeafNode::BTLeafNode(){
+BTLeafNode::BTLeafNode(PageId pid){
 	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
 														//Do we want to use -1 or 0?
+	m_pid = pid;
 }
 
 /*
@@ -69,7 +70,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	int keyTmp;
 	for(; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
-		if(keyTmp == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
+		if(keyTmp == -1 || (key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
 
 	}
 
@@ -127,7 +128,8 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 
 	//copy everything past the split index to the sibling
 	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
-	sibling.setNextNodePtr(nextPtr); //Is this right? Or should it be the other way around?
+	sibling.setNextNodePtr(nextPtr); 
+	setNextNodePtr(sibling.m_pid);
 
 	//clear pairs that we copied over to sibling from this node
 	std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE - pageIdSize, -1);
@@ -227,9 +229,10 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 	return 0; 
 }
 
-BTNonLeafNode::BTNonLeafNode(){
+BTNonLeafNode::BTNonLeafNode(PageId pid){
 	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
 														//Do we want to use -1 or 0?
+	m_pid = pid;
 }
 
 /*
@@ -304,7 +307,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	int keyTmp;
 	for(; i < PageFile::PAGE_SIZE - pageIdSize ; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
-		if(keyTmp == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
+		if(keyTmp == -1 || (key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
 
 	}
 
@@ -377,7 +380,8 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 
 	//copy everything past the split index to the sibling
 	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
-	sibling.setNextNodePtr(nextPtr); //Is this right? Or should it be the other way around?
+	sibling.setNextNodePtr(nextPtr); 
+	setNextNodePtr(sibling.m_pid);
 
 	//clear pairs that we copied over to sibling from this node
 	std::fill(buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex, -1);
