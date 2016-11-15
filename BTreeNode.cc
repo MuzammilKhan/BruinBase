@@ -67,7 +67,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	//assuming keys are in ascending order, makes checking with -1 easy
 	int i = 0;
 	int keyTmp;
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize) {	
+	for(; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
 		if(keyTmp == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
 
@@ -222,7 +222,7 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 { 
 	if(pid < 0){ return RC_INVALID_PID;}
 
-	char* bufPtr;
+	char* bufPtr = buffer;
 	memcpy(bufPtr + PageFile::PAGE_SIZE - sizeof(PageId), &pid, sizeof(PageId));
 	return 0; 
 }
@@ -302,7 +302,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	//assuming keys are in ascending order, makes checking with -1 easy
 	int i = pageIdSize;
 	int keyTmp;
-	for(; i < PageFile::PAGE_SIZE ; i += pairSize, bufPtr += pairSize) {	
+	for(; i < PageFile::PAGE_SIZE - pageIdSize ; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
 		if(keyTmp == -1 || (key < keyTmp)) {break;} //stop when at end of keys or key we want to insert is smaller than key in buffer
 
@@ -336,7 +336,66 @@ RC BTNonLeafNode::insert(int key, PageId pid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey)
-{ return 0; }
+{ 
+	int intSize = sizeof(int); 
+	int pageIdSize = sizeof(PageId);
+	int pairSize = intSize + pageIdSize;
+
+
+	if(!(getKeyCount() + 1 > (PageFile::PAGE_SIZE - pageIdSize)/pairSize )) { 
+		return RC_INVALID_FILE_FORMAT; //trying to split when there is no overflow results in bad format
+	}
+	if(sibling.getKeyCount() != 0) {
+		return RC_INVALID_ATTRIBUTE; //sibling must be empty, if it isnt this is invalid
+	}	
+
+	//SPLITTING CODE
+
+	PageId nextPtr;
+	char* bufPtr = buffer;
+	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);	
+
+	int keepKeysCount = (int) ceil(((float) getKeyCount() + 1)/2); //number of keys to keep in this node
+	int splitIndex = keepKeysCount*pairSize + pageIdSize; //index to split at
+
+	int last_leftkey;
+	int first_rightkey;
+
+	memcpy(&last_leftkey, bufPtr + splitIndex - intSize, intSize);
+	memcpy(&first_rightkey, bufPtr + splitIndex, intSize);
+
+	if (key < last_leftkey) { // last_leftkey is median key
+		memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
+		memcpy(&midKey, buffer + splitIndex - pairSize, intSize);
+
+
+	} else if (key > first_rightkey) { // first_rightkey is median key
+
+	} else { // key is median key
+
+	}
+
+	//copy everything past the split index to the sibling
+	memcpy(sibling.buffer, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
+	sibling.setNextNodePtr(nextPtr); //Is this right? Or should it be the other way around?
+
+	//clear pairs that we copied over to sibling from this node
+	std::fill(buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex, -1);
+
+	//INSERTION CODE
+	memcpy(&siblingKey, sibling.buffer, intSize); //first key in sibling
+	if(key >= siblingKey) { //figure out whether to put key here or in sibling
+		sibling.insert(key, rid);
+	} else {
+		insert(key,rid);
+	}
+	RecordId siblingRid; //We need to intialize the sid and pid of sibling's rid
+	siblingRid.sid = -1;
+	siblingRid.pid = -1;
+	memcpy(&siblingRid, sibling.buffer + intSize), sizeof(RecordId);
+
+	return 0;
+}
 
 /*
  * Given the searchKey, find the child-node pointer to follow and
@@ -346,7 +405,36 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
-{ return 0; }
+{ 
+	// representation:
+	// [pid | key | pid | ... | key | pid]
+
+	int pageIdSize = sizeof(PageId);
+	int intSize = sizeof(int);
+	int pairSize = intSize + pageIdSize;
+
+	char* bufPtr = buffer + pageIdSize; // start at first key
+	int i = pageIdSize;
+	for (; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, bufPtr += pairSize) {
+		int keyTmp;
+		memcpy(&keyTmp, bufPtr, intSize);
+
+		// there are no more keys, jump to next node
+		if (keyTmp == -1) {
+			break;
+		}
+
+		// return pid to left
+		if (searchKey > keyTmp) {
+			memcpy(&pid, bufPtr - pageIdSize, pageIdSize);
+			return 0;
+		}
+	}
+
+	// copy pointer to next node
+	memcpy(&pid, buffer + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);
+	return 0;
+}
 
 /*
  * Initialize the root node with (pid1, key, pid2).
@@ -356,4 +444,16 @@ RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
-{ return 0; }
+{ 
+	std::fill(buffer, buffer + PageFile::PAGE_SIZE, -1); // initialize buffer contents
+
+	char* bufptr = buffer;
+	int pageIdSize = sizeof(PageId);
+	int intSize = sizeof(int);
+
+	memcpy(bufptr, &pid1, pageIdSize);
+	memcpy(bufptr + pageIdSize, &key, intSize);
+	memcpy(bufptr + pageIdSize + intSize, &pid2, pageIdSize);
+
+	return 0;
+}
