@@ -73,7 +73,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	//assuming keys are in ascending order, makes checking with -1 easy
 	int i = 0;
 	int keyTmp;
-	for(; i < PageFile::PAGE_SIZE - pageIdSize; i += pairSize, bufPtr += pairSize) {	
+	for(; i < getKeyCount() * pairSize; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
 		if(keyTmp == -1 || !(key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
 
@@ -335,7 +335,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	//assuming keys are in ascending order, makes checking with -1 easy
 	int i = 0; //pageIdSize;
 	int keyTmp;
-	for(; i < PageFile::PAGE_SIZE - pageIdSize ; i += pairSize, bufPtr += pairSize) {	
+	for(; i < getKeyCount() * pairSize ; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
 		if(keyTmp == -1 || !(key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
 
