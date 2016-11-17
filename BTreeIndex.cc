@@ -110,7 +110,7 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 		return 0;
 	} else if (rc == RC_NO_SUCH_RECORD) { 
 		//go to beginning of next node
-		cursor.pid = node.getNextPtr();
+		cursor.pid = leaf.getNextPtr();
 		cursor.eid = 0;
 		if(cursor.pid == -1) { //check if at end of tree
 			return RC_END_OF_TREE;
