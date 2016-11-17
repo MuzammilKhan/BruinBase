@@ -34,6 +34,12 @@ RC BTreeIndex::open(const string& indexname, char mode)
 		return rc;
 	}
 
+	//create index file if it doesn't exist
+	if(pf.endPid() <= 0) {
+		BTLeafNode tmp;
+		return tmp.write(rootPid, pf);
+	}
+
     return 0;
 }
 
@@ -91,5 +97,27 @@ RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
  */
 RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 {
+	RC rc;
+	BTLeafNode leaf;
+
+	if( (rc = leaf.read(cursor.pid, pf)) < 0) { //Do we have any error checking in read though?
+		return rc;
+	}
+
+	rc = leaf.readEntry(cursor.eid, key, rid);
+	if( rc == 0) {
+		cursor.eid++;
+		return 0;
+	} else if (rc == RC_NO_SUCH_RECORD) { 
+		//go to beginning of next node
+		cursor.pid = node.getNextPtr();
+		cursor.eid = 0;
+		if(cursor.pid == -1) { //check if at end of tree
+			return RC_END_OF_TREE;
+		}
+	} else {
+		return RC_INVALID_CURSOR;
+	}
+
     return 0;
 }
