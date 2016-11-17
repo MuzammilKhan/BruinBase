@@ -65,7 +65,7 @@ RC BTreeIndex::insert(int key, const RecordId& rid)
 }
 
 //recursive helper function for locate
-RC search_tree( int searchKey, IndexCursor& cursor, int currHeight, PageId% nextPid) {
+RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, PageId& nextPid) {
 
 	//check for valid search key
 	if(searchKey < 0) {
