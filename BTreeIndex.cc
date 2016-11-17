@@ -64,6 +64,44 @@ RC BTreeIndex::insert(int key, const RecordId& rid)
     return 0;
 }
 
+//recursive helper function for locate
+RC search_tree( int searchKey, IndexCursor& cursor, int currHeight, PageId% nextPid) {
+
+	//check for valid search key
+	if(searchKey < 0) {
+		return RC_INVALID_ATTRIBUTE;
+	}
+
+	RC rc;
+	//base case at leaf
+	if(currHeight == treeHeight) {
+		BTLeafNode leaf;
+		if( (rc = leaf.read(nextPid, pf)) < 0) {
+			return rc;
+		}
+
+		if( (rc = leaf.locate(searchKey, cursor.eid)) < 0) {
+			return rc;
+		}
+
+		cursor.pid = nextPid;
+		return 0;
+	}
+
+	//recursive step check for errors and go down to leaf
+	BTNonLeafNode nonLeaf;
+	if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
+		return rc;
+	}	
+
+	if( (rc = nonLeaf.locateChildPtr(searchKey, nextPid)) < 0) {
+		return rc;
+	}
+
+	return search_tree(search_tree, cursor, currHeight - 1, nextPid);
+
+}
+
 /**
  * Run the standard B+Tree key search algorithm and identify the
  * leaf node where searchKey may exist. If an index entry with
