@@ -61,6 +61,14 @@ RC BTreeIndex::close()
  */
 RC BTreeIndex::insert(int key, const RecordId& rid)
 {
+	//search to determine what bucket to put record in
+
+	//try to insert, if successful done.
+
+	//else if node was full insert and split, if this fails b/c parent is full split it too
+	//add middle key to parent node and repeat until we find a parent we dont have to split.
+	//if root splits create a new root with one key and two pointers (new value gets pushed 
+	//to new root and removed from original node)
     return 0;
 }
 
@@ -122,7 +130,7 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
  */
 RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
 {
-    return 0;
+	return search_tree(searchKey, cursor, treeHeight, rootPid); 
 }
 
 /*
