@@ -98,7 +98,7 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 		return rc;
 	}
 
-	return search_tree(search_tree, cursor, currHeight - 1, nextPid);
+	return search_tree(searchKey, cursor, currHeight - 1, nextPid);
 
 }
 
