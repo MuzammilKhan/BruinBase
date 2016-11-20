@@ -242,11 +242,13 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 	if(currHeight == treeHeight) {
 		BTLeafNode leaf;
 		if( (rc = leaf.read(nextPid, pf)) < 0) {
-			return rc;
+		  cout << "currheight: " << currHeight << " leaf read error: " << rc << endl;
+		  return rc;
 		}
 
 		if( (rc = leaf.locate(searchKey, cursor.eid)) < 0) {
-			return rc;
+		  cout << "currheight: " << currHeight << " leaf locate error: " << rc << endl; 
+		  return rc;
 		}
 
 		cursor.pid = nextPid;
