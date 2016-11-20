@@ -291,6 +291,18 @@ int main()
 
   for (int i=0; i<200; i++)
     test.insert(i, (RecordId) {i, i});
+
+  //print out all keys on leaf level
+  IndexCursor cursor;
+  cursor.eid = 0;
+  cursor.pid = 1; //double check these
+  int key;
+  RecordId rid;
+  cout << "keys: ";
+  while(test.readForward(cursor, key ,rid) == 0) {
+    cout << key << " ";
+  }
+  cout << "" << endl;
     
   cout << "" << endl;
 
