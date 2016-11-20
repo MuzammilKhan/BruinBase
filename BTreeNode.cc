@@ -2,7 +2,6 @@
 #include <iostream>
 #include <cstring>
 #include <cstdlib>
-#include <cmath>
 
 using namespace std;
 
@@ -128,7 +127,7 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	char* bufPtr = buffer;
 	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);	
 
-	int keepKeysCount = (int) ceil(((float) getKeyCount() + 1)/2); //number of keys to keep in this node
+	int keepKeysCount = ((int)((getKeyCount() + 1)/2)); //number of keys to keep in this node
 	int splitIndex = keepKeysCount*pairSize; //index to split at
 
 	//copy everything past the split index to the sibling

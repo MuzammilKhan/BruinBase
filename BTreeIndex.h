@@ -13,6 +13,8 @@
 #include "Bruinbase.h"
 #include "PageFile.h"
 #include "RecordFile.h"
+
+const int intSize = sizeof(int);
              
 /**
  * The data structure to point to a particular entry at a b+tree leaf node.
@@ -100,6 +102,12 @@ class BTreeIndex {
   /// this class is destructed. Make sure to store the values of the two 
   /// variables in disk, so that they can be reconstructed when the index
   /// is opened again later.
+
+  // used to store rootpid and treeheight to disk
+  // use pagefile with pid = 0 for this
+  // although we store only two variables in here, we write to a whole page
+  // ^therefore we just set the size of the buffer to the page size
+  char index_buffer[PageFile::PAGE_SIZE];
 };
 
 #endif /* BTREEINDEX_H */

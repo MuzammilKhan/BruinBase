@@ -9,6 +9,8 @@
  
 #include "BTreeIndex.h"
 #include "BTreeNode.h"
+#include <cstring>
+#include <cstdlib>
 
 using namespace std;
 
@@ -18,6 +20,8 @@ using namespace std;
 BTreeIndex::BTreeIndex()
 {
     rootPid = -1;
+    treeHeight = 0;
+    std::fill(index_buffer, index_buffer + PageFile::PAGE_SIZE, -1); // empty out buffer
 }
 
 /*
@@ -29,15 +33,35 @@ BTreeIndex::BTreeIndex()
  */
 RC BTreeIndex::open(const string& indexname, char mode)
 {
-	RC rc;
-	if((rc = pf.open(indexname, mode)) < 0) {
+	RC rc = pf.open(indexname, mode);
+	if(rc < 0) {
 		return rc;
 	}
 
-	//create index file if it doesn't exist
+	// create index file if it doesn't exist and update disk entry with buffer info
+	// if index file doesn't exist, this is the first time this tree is being used
+	// ^possibly reinitalize rootPid and treeHeight to be sure of values?
 	if(pf.endPid() <= 0) {
-		BTLeafNode tmp;
-		return tmp.write(rootPid, pf);
+		rc = pf.write(0, index_buffer);
+		if (rc < 0) {
+			return rc;
+		}
+	} else {
+		rc = pf.read(0, index_buffer);
+		if (rc < 0) {
+			return rc;
+		}
+
+		int t_pid, t_height;
+		memcpy(&t_pid, index_buffer, intSize);
+		memcpy(&t_height, index_buffer + intSize, intSize);
+
+		// ensure stored values are valid before setting member variables
+		// note: we use pid = 0 for the index file by default so we cannot store the tree there
+		if (t_pid > 0 && t_height >= 0) {
+			rootPid = t_pid;
+			treeHeight = t_height;
+		}
 	}
 
     return 0;
@@ -49,8 +73,16 @@ RC BTreeIndex::open(const string& indexname, char mode)
  */
 RC BTreeIndex::close()
 {
-	rootPid = -1;
-    return pf.close();
+	memcpy(index_buffer, &rootPid, intSize);
+	memcpy(index_buffer + intSize, &treeHeight, intSize);
+    
+    // store rootpid and treeheight before closing file
+    RC rc = pf.write(0, index_buffer);
+    if (rc < 0) {
+    	return rc;
+    } else {
+    	return pf.close();
+    }
 }
 
 /*
