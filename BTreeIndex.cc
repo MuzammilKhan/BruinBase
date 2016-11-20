@@ -43,7 +43,8 @@ RC BTreeIndex::open(const string& indexname, char mode)
 	// if index file doesn't exist, this is the first time this tree is being used
 	// ^possibly reinitalize rootPid and treeHeight to be sure of values?
 	if(pf.endPid() <= 0) {
-		rc = pf.write(0, index_buffer);
+	  cout << "Index file doesn't exist, creating it now..." << endl;
+	        rc = pf.write(0, index_buffer);
 		if (rc < 0) {
 			return rc;
 		}

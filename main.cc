@@ -287,10 +287,13 @@ int main()
   IndexCursor c;
   //test BTreeIndex
   BTreeIndex test;
+  cout << "Initial Rootpid: " << test.getRootPid() << endl;
   test.open("testIndex.idx", 'w');
 
-  for (int i=0; i<200; i++)
+  for (int i=0; i<200; i++) {
+    cout << "Rootpid: " << test.getRootPid() << endl;
     test.insert(i, (RecordId) {i, i});
+  }
 
   //print out all keys on leaf level
   IndexCursor cursor;
