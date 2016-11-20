@@ -178,23 +178,23 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 	RC rc;
 	BTLeafNode leaf;
 
-	if( (rc = leaf.read(cursor.pid, pf)) < 0) { //Do we have any error checking in read though?
+	rc = leaf.read(cursor.pid, pf);
+	if(rc < 0) {
 		return rc;
 	}
 
 	rc = leaf.readEntry(cursor.eid, key, rid);
-	if( rc == 0) {
+	if (rc < 0) {
+		return rc;
+	}
+
+	// ensure we do not increment past the number of keys available
+	if (cursor.eid + 1 < leaf.getKeyCount()) {
 		cursor.eid++;
-		return 0;
-	} else if (rc == RC_NO_SUCH_RECORD) { 
-		//go to beginning of next node
-		cursor.pid = leaf.getNextNodePtr();
-		cursor.eid = 0;
-		if(cursor.pid == -1) { //check if at end of tree
-			return RC_END_OF_TREE;
-		}
 	} else {
-		return RC_INVALID_CURSOR;
+		// reset the eid but move to the next page
+		cursor.eid = 0;
+		cursor.pid = leaf.getNextNodePtr();
 	}
 
     return 0;
