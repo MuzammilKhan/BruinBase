@@ -10,6 +10,7 @@
 #include "Bruinbase.h"
 #include "SqlEngine.h"
 #include "BTreeNode.h"
+#include "BTreeIndex.h"
 #include <cstdio>
 #include <iostream>
 
@@ -225,6 +226,125 @@ int main()
   cout << "After insertAndSplit, sibling2 node has numKeys: " << sibling2.getKeyCount() << endl;
   cout << "Median: " << median << endl;
   // run the SQL engine taking user commands from standard input (console).
+
+  cout << sizeof(PageFile) << endl;
+  cout << sizeof(PageId) << endl;
+  cout << sizeof(int) << endl;
+
+  PageFile pf;
+  pf.open("test", 'w');
+
+  cout << "pf.endPid() on initialization: " << pf.endPid() << endl;
+
+  //check for endPid changes
+  BTLeafNode thisLeaf;
+  for(int i=0; i<85; i++)
+    thisLeaf.insert(1, (RecordId) {1,1});
+
+  cout << "thisLeaf has key count: " << thisLeaf.getKeyCount() << endl;
+    
+  cout << "pf.endPid() after insert: " << pf.endPid() << endl;
+    
+  //Try inserting leaf node
+  //If succesful, write back into PageFile
+  cout << "thisLeaf write: " << thisLeaf.write(1, pf) << endl;
+
+  cout << "pf.endPid() after thisLeaf write: " << pf.endPid() << endl;
+
+  //Try inserting leaf node via splitting
+  BTLeafNode anotherLeaf;
+  int anotherKey;
+
+  thisLeaf.insertAndSplit(2, (RecordId) {2,2}, anotherLeaf, anotherKey);
+
+  cout << "thisLeaf has key count: " << thisLeaf.getKeyCount() << endl;
+  cout << "anotherLeaf has key count: " << anotherLeaf.getKeyCount() << endl;
+
+  cout << "pf.endPid() after insert and split: " << pf.endPid() << endl;
+
+  //Write new contents into thisLeaf and anotherLeaf
+  //Notice that anotherLeaf starts writing at the end of the last pid
+  cout << "anotherLeaf write: " << anotherLeaf.write(pf.endPid(), pf) << endl;
+
+  cout << "pf.endPid() after anotherLeaf write: " << pf.endPid() << endl;
+
+  thisLeaf.setNextNodePtr(pf.endPid());
+
+  cout << "pf.endPid() after setting thisLeaf's next node ptr: " << pf.endPid() << endl;
+
+  pf.close();
+  pf.open("test", 'r');
+
+  BTLeafNode readTest;
+  cout << "readTest: " << readTest.read(1, pf) << endl;
+  BTLeafNode readTest2;
+  cout << "readTest2: " << readTest2.read(2, pf) << endl;
+  cout << "readTest has key count: " << readTest.getKeyCount() << endl;
+  cout << "readTest2 has key count: " << readTest2.getKeyCount() << endl;
+
+  cout << "TESTING INDEX NOW-----------------------------------" << endl;
+
+  IndexCursor c;
+  //test BTreeIndex
+  BTreeIndex test;
+  test.open("testIndex.idx", 'w');
+
+  for (int i=0; i<200; i++)
+    test.insert(i, (RecordId) {i, i});
+    
+  cout << "" << endl;
+
+
+  cout << "did it work: " << test.locate(1, c) << endl;
+    cout << "1: " << c.eid << " / " << c.pid << endl;
+  cout << "did it work: " << test.locate(20, c) << endl;
+    cout << "9: " << c.eid << " / " << c.pid << endl;
+  cout << "did it work: " << test.locate(500, c) << endl;
+    cout << "500: " << c.eid << " / " << c.pid << endl;
+    
+  //print out totals for testing purposes
+  cout << "rootPid: " << test.getRootPid() << endl;
+  cout << "treeHeight: " << test.getTreeHeight() << endl;
+    
+  //test.insert(2342, (RecordId) {1,0});
+    
+  test.close();
+
+
+  BTreeIndex test2;
+  test2.open("testIndex2.idx", 'w');
+  cout << "test2 treeHeight: " << test2.getTreeHeight() << endl;
+
+  test2.insert(272, (RecordId) {0,0});
+  cout << "test2 treeHeight: " << test2.getTreeHeight() << endl;
+  cout << "did it work: " << test2.locate(272, c) << endl;
+    cout << "272: " << c.eid << " / " << c.pid << endl;
+  test2.insert(2342, (RecordId) {0,1});
+  cout << "did it work: " << test2.locate(2342, c) << endl;
+    cout << "2342: " << c.eid << " / " << c.pid << endl;
+    
+  cout << "test2 treeHeight: " << test2.getTreeHeight() << endl;
+  test2.close();
+
+     
+  //test BTreeIndex
+  BTreeIndex test3;
+  test3.open("testIndex.idx", 'w');
+
+  for (int i=1; i<200; i++)
+    test3.insert(i, (RecordId) {i, i});
+    
+  cout << "" << endl;
+    
+  //print out totals for testing purposes
+  cout << "rootPid: " << test3.getRootPid() << endl;
+  cout << "treeHeight: " << test3.getTreeHeight() << endl;
+    
+  //test.insert(2342, (RecordId) {1,0});
+    
+  test3.close();
+
+  cout << "*****TESTS DONE*****" << endl;
 
   SqlEngine::run(stdin);
 

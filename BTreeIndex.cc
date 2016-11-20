@@ -322,3 +322,11 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 
     return 0;
 }
+
+PageId BTreeIndex::getRootPid() {
+	return rootPid;
+}
+
+int BTreeIndex::getTreeHeight() {
+	return treeHeight;
+}
