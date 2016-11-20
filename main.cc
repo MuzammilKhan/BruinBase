@@ -180,6 +180,8 @@ int main()
   
   //Check child pointers
   PageId rootPid = -1;
+
+  root.print();
   
   root.locateChildPtr(50, rootPid);
   cout << "50 has child pointer: " << rootPid << endl;
@@ -221,6 +223,7 @@ int main()
   root2.insertAndSplit(131, 6, sibling2, median); //Replace the key to be inserted with the numbers above to test
   cout << "After insertAndSplit, root2 node has numKeys: " << root2.getKeyCount() << endl;
   cout << "After insertAndSplit, sibling2 node has numKeys: " << sibling2.getKeyCount() << endl;
+  cout << "Median: " << median << endl;
   // run the SQL engine taking user commands from standard input (console).
 
   SqlEngine::run(stdin);

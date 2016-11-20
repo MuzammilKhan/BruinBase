@@ -322,9 +322,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 
 	int pageIdSize = sizeof(PageId);
 	int intSize = sizeof(int);
-	PageId nextPtr;
-	char* bufPtr = buffer;
-	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);
+	char* bufPtr = buffer+pageIdSize;
 
 	int pairSize = intSize + pageIdSize;
 	int keyCount = getKeyCount();
@@ -333,9 +331,9 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	}
 
 	//assuming keys are in ascending order, makes checking with -1 easy
-	int i = 0; //pageIdSize;
+	int i = pageIdSize;
 	int keyTmp;
-	for(; i < getKeyCount() * pairSize ; i += pairSize, bufPtr += pairSize) {	
+	for(; i < PageFile::PAGE_SIZE - pairSize ; i += pairSize, bufPtr += pairSize) {	
 		memcpy(&keyTmp, bufPtr, intSize);
 		if(keyTmp == -1 || !(key > keyTmp)) {break;} //stop when at end of keys or key we want to insert is greater than key in buffer
 
@@ -349,8 +347,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	memcpy(tmpBuf, buffer, i); 
 	memcpy(tmpBuf + i, &key, intSize); 
 	memcpy(tmpBuf + i + intSize, &pid, pageIdSize); 
-	memcpy(tmpBuf + i + pairSize, buffer + i, keyCount * pairSize - i);
-	memcpy(tmpBuf + PageFile::PAGE_SIZE - pageIdSize, &nextPtr, pageIdSize);
+	memcpy(tmpBuf + i + pairSize, buffer + i, keyCount * pairSize - i + pageIdSize);
 	memcpy(buffer, tmpBuf, PageFile::PAGE_SIZE);
 	free(tmpBuf);
 	return 0;
@@ -378,26 +375,24 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 	}
 	if(sibling.getKeyCount() != 0) {
 		return RC_INVALID_ATTRIBUTE; //sibling must be empty, if it isnt this is invalid
-	}	
+	}
+
+	// POSSIBLY CLEAR SIBLING BUFFER	
 
 	//SPLITTING CODE
 
-	PageId nextPtr;
-	char* bufPtr = buffer;
-	memcpy(&nextPtr, bufPtr + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);	
-
-	int keepKeysCount = (int) ceil(((float) getKeyCount() + 1)/2); //number of keys to keep in this node
+	int keepKeysCount = ((int)((getKeyCount() + 1)/2)); //number of keys to keep in this node
 	int splitIndex = keepKeysCount*pairSize + pageIdSize; //index to split at
 
 	int last_leftkey;
 	int first_rightkey;
 
-	memcpy(&last_leftkey, bufPtr + splitIndex - pairSize, intSize);
-	memcpy(&first_rightkey, bufPtr + splitIndex, intSize);
+	memcpy(&last_leftkey, buffer + splitIndex - pairSize, intSize);
+	memcpy(&first_rightkey, buffer + splitIndex, intSize);
 
 	if (key < last_leftkey) { // last_leftkey is median key
 		memcpy(sibling.buffer, buffer + splitIndex - pageIdSize, pageIdSize);
-		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex, PageFile::PAGE_SIZE - pageIdSize - splitIndex);
+		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex, PageFile::PAGE_SIZE - splitIndex);
 		memcpy(&midKey, buffer + splitIndex - pairSize, intSize);
 
 		std::fill(buffer + splitIndex - pairSize, buffer + PageFile::PAGE_SIZE, -1); // remove copied over elements
@@ -406,7 +401,7 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 
 	} else if (key > first_rightkey) { // first_rightkey is median key
 		memcpy(sibling.buffer, buffer + splitIndex + intSize, pageIdSize); // pid
-		memcpy(sibling.buffer + intSize, buffer + splitIndex + pairSize, PageFile::PAGE_SIZE - splitIndex - pairSize - pageIdSize);
+		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex + pairSize, PageFile::PAGE_SIZE - splitIndex - pairSize);
 		memcpy(&midKey, buffer + splitIndex, intSize); // save mid key
 
 		std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE, -1);
@@ -414,7 +409,7 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 		sibling.insert(key, pid);
 
 	} else { // key is median key
-		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex, PageFile::PAGE_SIZE - splitIndex - pageIdSize);
+		memcpy(sibling.buffer + pageIdSize, buffer + splitIndex, PageFile::PAGE_SIZE - splitIndex);
 		memcpy(sibling.buffer, &pid, pageIdSize);
 		midKey = key;
 		std::fill(buffer + splitIndex, buffer + PageFile::PAGE_SIZE, -1);
@@ -458,7 +453,7 @@ RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
 	}
 
 	// copy pointer to next node
-	memcpy(&pid, buffer + PageFile::PAGE_SIZE - pageIdSize, pageIdSize);
+	memcpy(&pid, bufPtr - pageIdSize, pageIdSize);
 	return 0;
 }
 
