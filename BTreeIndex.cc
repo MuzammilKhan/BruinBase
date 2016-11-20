@@ -86,9 +86,12 @@ RC BTreeIndex::close()
 }
 
 //recursive helper for insert
-RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, IndexCursor& cursor, PageId& nextPid) {
+RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, PageId& nextPid, int& splitKey_t, int& splitPid_t) {
 
 	RC rc;
+	bool updateRoot = false;
+	int newPid, siblingKey;
+
 	//Leaf case
 	if(currHeight == treeHeight) {
 
@@ -96,49 +99,101 @@ RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, IndexCur
 		if( (rc = leaf.read(nextPid, pf)) < 0) {
 			return rc;
 		}
-		if( (rc = leaf.locate(key, cursor.eid)) < 0) {
-			return rc;
-		}
-		cursor.pid = nextPid;
 
 		//attempt to insert
-		if( (rc = leaf.insert(            ) ) == 0) {
+		if( (rc = leaf.insert(key, rid) ) == 0) {
+			leaf.write(nextPid, pf);
 			return 0;
 		}
 
-		//if it fails try insert and split
-		if( (rc = leaf.insertAndSplit(          ) ) == 0) {
-			return 0;
+		//if insert fails, try insert and split
+		BTLeafNode sibling;
+		if( (rc = leaf.insertAndSplit(key, rid, sibling, siblingKey) ) < 0) {
+			return rc;
 		}
-		//if this fails return failure
-		return -1;
+
+		newPid = pf.endPid(); // where we will write the new sibling leaf
+
+		// save values of split key and pid so we can propagate and insert further up in nonleafs
+		splitKey_t = siblingKey;
+		splitPid_t = newPid;
+
+		// if succesful, we need to update parent and next pointers
+		sibling.setNextNodePtr(leaf.getNextNodePtr());
+		leaf.setNextNodePtr(newPid);
+
+		rc = sibling.write(newPid, pf); // actually write sibling to new pid
+		if (rc < 0) {
+			return rc;
+		}
+		rc = leaf.write(nextPid, pf); // write updated current leaf to pid
+		if (rc < 0) {
+			return rc;
+		}
+
+		if (treeHeight == 1) {
+			updateRoot = true;
+		}
+	} else {
+		BTNonLeafNode nonLeaf;
+		if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
+			return rc;
+		}	
+
+		int childPid = -1;
+		if( (rc = nonLeaf.locateChildPtr(key, childPid)) < 0) {
+			return rc;
+		}
+
+		int splitKey = -1;
+		int splitPid = -1;
+
+		rc = rec_insert(key, rid, currHeight + 1, childPid, splitKey, splitPid);
+		if(rc < 0) {
+			// what to do?
+		}
+
+		// we had a split earlier, so we need to insert this median value
+		// into this node, or propagate it up
+		if (splitPid != -1) {
+			if (nonLeaf.insert(splitKey, splitPid) == 0) {
+				nonLeaf.write(nextPid, pf); // insert worked fine so we can return
+				return 0;
+			}
+
+			// if insert fails, try insert and split
+			BTNonLeafNode sibling;
+			if( (rc = nonLeaf.insertAndSplit(splitKey, splitPid, sibling, siblingKey) ) < 0) {
+				return rc;
+			}
+
+			newPid = pf.endPid(); // where we will write the new sibling nonleaf
+
+			// save values of split key and pid so we can propagate and insert further up in nonleafs
+			splitKey_t = siblingKey;
+			splitPid_t = newPid;
+
+			rc = sibling.write(newPid, pf); // actually write sibling to new pid
+			if (rc < 0) {
+				return rc;
+			}
+			rc = nonLeaf.write(nextPid, pf); // write updated current nonleaf to pid
+			if (rc < 0) {
+				return rc;
+			}
+
+			if (treeHeight == 1) {
+				updateRoot = true;
+			}
+		}
 	}
 
-	BTNonLeafNode nonLeaf;
-	if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
-		return rc;
-	}	
-
-	if( (rc = nonLeaf.locateChildPtr(key, nextPid)) < 0) {
-		return rc;
-	}
-
-	rc = rec_insert(key, rid, currHeight + 1, cursor, nextPid);
-	if(rc < 0) {
-	//Nonleaf case
-		//try to insert
-		if( (rc = nonLeaf.insert(            ) ) == 0) {
-			return 0;
-		}
-
-		//if it fails try insert and split
-		if( (rc = nonLeaf.insertAndSplit(          ) ) == 0) {
-			return 0;
-		}
-		//if this fails return failure
-		return -1;
-
-	//What about root case? Is it the same as nonleaf case?
+	if (updateRoot) {
+		BTNonLeafNode n_root;
+		n_root.initializeRoot(nextPid, siblingKey, newPid);
+		rootPid = pf.endPid();
+		n_root.write(rootPid, pf);
+		treeHeight++;
 	}
 
 	return 0;
@@ -152,7 +207,24 @@ RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, IndexCur
  */
 RC BTreeIndex::insert(int key, const RecordId& rid)
 {
-    return 	rec_insert(key, rid, 1);
+	// create a root
+	if (treeHeight == 0) {
+		BTLeafNode root;
+		root.insert(key, rid);
+
+		int newPid = pf.endPid();
+		if (newPid == 0) {
+			rootPid = 1; // 0 is used for storing index data
+		} else {
+			rootPid = newPid;
+		}
+
+		treeHeight = 1;
+		return root.write(rootPid, pf);
+	}
+
+	int splitKey = -1, splitPid = -1;
+    return rec_insert(key, rid, 1, rootPid, splitKey, splitPid);
 }
 
 //recursive helper function for locate

@@ -53,8 +53,7 @@ class BTreeIndex {
   RC close();
     
   //helper for insert
-  RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, IndexCursor& cursor, PageId& nextPid);
-  
+  RC rec_insert(int key, const RecordId& rid, int currHeight, PageId& nextPid, int& splitKey_t, int& splitPid_t);  
   /**
    * Insert (key, RecordId) pair to the index.
    * @param key[IN] the key for the value inserted into the index
