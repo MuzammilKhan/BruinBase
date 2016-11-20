@@ -85,6 +85,65 @@ RC BTreeIndex::close()
     }
 }
 
+//recursive helper for insert
+RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, IndexCursor& cursor, PageId& nextPid) {
+
+	RC rc;
+	//Leaf case
+	if(currHeight == treeHeight) {
+
+		BTLeafNode leaf;
+		if( (rc = leaf.read(nextPid, pf)) < 0) {
+			return rc;
+		}
+		if( (rc = leaf.locate(key, cursor.eid)) < 0) {
+			return rc;
+		}
+		cursor.pid = nextPid;
+
+		//attempt to insert
+		if( (rc = leaf.insert(            ) ) == 0) {
+			return 0;
+		}
+
+		//if it fails try insert and split
+		if( (rc = leaf.insertAndSplit(          ) ) == 0) {
+			return 0;
+		}
+		//if this fails return failure
+		return -1;
+	}
+
+	BTNonLeafNode nonLeaf;
+	if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
+		return rc;
+	}	
+
+	if( (rc = nonLeaf.locateChildPtr(key, nextPid)) < 0) {
+		return rc;
+	}
+
+	rc = rec_insert(key, rid, currHeight + 1, cursor, nextPid);
+	if(rc < 0) {
+	//Nonleaf case
+		//try to insert
+		if( (rc = nonLeaf.insert(            ) ) == 0) {
+			return 0;
+		}
+
+		//if it fails try insert and split
+		if( (rc = nonLeaf.insertAndSplit(          ) ) == 0) {
+			return 0;
+		}
+		//if this fails return failure
+		return -1;
+
+	//What about root case? Is it the same as nonleaf case?
+	}
+
+	return 0;
+}
+
 /*
  * Insert (key, RecordId) pair to the index.
  * @param key[IN] the key for the value inserted into the index
@@ -93,15 +152,7 @@ RC BTreeIndex::close()
  */
 RC BTreeIndex::insert(int key, const RecordId& rid)
 {
-	//search to determine what bucket to put record in
-
-	//try to insert, if successful done.
-
-	//else if node was full insert and split, if this fails b/c parent is full split it too
-	//add middle key to parent node and repeat until we find a parent we dont have to split.
-	//if root splits create a new root with one key and two pointers (new value gets pushed 
-	//to new root and removed from original node)
-    return 0;
+    return 	rec_insert(key, rid, 1);
 }
 
 //recursive helper function for locate
@@ -138,7 +189,7 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 		return rc;
 	}
 
-	return search_tree(searchKey, cursor, currHeight - 1, nextPid);
+	return search_tree(searchKey, cursor, currHeight + 1, nextPid);
 
 }
 
@@ -162,7 +213,7 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
  */
 RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
 {
-	return search_tree(searchKey, cursor, treeHeight, rootPid); 
+	return search_tree(searchKey, cursor, 1, rootPid); 
 }
 
 /*
