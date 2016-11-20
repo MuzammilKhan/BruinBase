@@ -254,10 +254,12 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 	//recursive step check for errors and go down to leaf
 	BTNonLeafNode nonLeaf;
 	if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
+		cout << "curreheight: " << currHeight << " " << "nonleaf read error: " << rc << endl;
 		return rc;
 	}	
 
 	if( (rc = nonLeaf.locateChildPtr(searchKey, nextPid)) < 0) {
+		cout << "curreheight: " << currHeight << " " << "nonleaf locateChildPtr error: " << rc << endl;		
 		return rc;
 	}
 
