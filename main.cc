@@ -296,11 +296,11 @@ int main()
   IndexCursor cursor;
   cursor.eid = 0;
   cursor.pid = 1; //double check these
-  int key;
-  RecordId rid;
+  int key2;
+  RecordId rid2;
   cout << "keys: ";
-  while(test.readForward(cursor, key ,rid) == 0) {
-    cout << key << " ";
+  while(test.readForward(cursor, key2 ,rid2) == 0) {
+    cout << key2 << " ";
   }
   cout << "" << endl;
     
