@@ -288,6 +288,7 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
  */
 RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
 {
+	cout << "rootPid: " << rootPid << endl;
 	return search_tree(searchKey, cursor, 1, rootPid); 
 }
 
