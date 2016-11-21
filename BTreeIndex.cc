@@ -43,8 +43,8 @@ RC BTreeIndex::open(const string& indexname, char mode)
 	// if index file doesn't exist, this is the first time this tree is being used
 	// ^possibly reinitalize rootPid and treeHeight to be sure of values?
 	if(pf.endPid() <= 0) {
-	  cout << "Index file doesn't exist, creating it now..." << endl;
-	        rc = pf.write(0, index_buffer);
+	  	cout << "Index file doesn't exist, creating it now..." << endl;
+	    rc = pf.write(0, index_buffer);
 		if (rc < 0) {
 			return rc;
 		}
@@ -54,7 +54,7 @@ RC BTreeIndex::open(const string& indexname, char mode)
 			return rc;
 		}
 
-		int t_pid, t_height;
+		int t_pid = -1, t_height = 0;
 		memcpy(&t_pid, index_buffer, intSize);
 		memcpy(&t_height, index_buffer + intSize, intSize);
 
@@ -82,9 +82,9 @@ RC BTreeIndex::close()
     RC rc = pf.write(0, index_buffer);
     if (rc < 0) {
     	return rc;
-    } else {
-    	return pf.close();
     }
+    
+    return pf.close();
 }
 
 //recursive helper for insert
@@ -259,6 +259,7 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 	BTNonLeafNode nonLeaf;
 	if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
 		cout << "curreheight: " << currHeight << " " << "nonleaf read error: " << rc << endl;
+		cout << "error at this pid: " << nextPid << endl << endl;
 		return rc;
 	}	
 
@@ -291,8 +292,9 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
  */
 RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
 {
-	cout << "rootPid: " << rootPid << endl;
-	return search_tree(searchKey, cursor, 1, rootPid); 
+	cout << "before locate rootPid: " << rootPid << endl;
+	PageId tempID = rootPid; // so root doesnt get changed
+	return search_tree(searchKey, cursor, 1, tempID); 
 }
 
 /*

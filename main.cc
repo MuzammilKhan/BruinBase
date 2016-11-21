@@ -291,9 +291,12 @@ int main()
   test.open("testIndex.idx", 'w');
 
   for (int i=0; i<200; i++) {
-    cout << "Rootpid: " << test.getRootPid() << endl;
     test.insert(i, (RecordId) {i, i});
   }
+
+  cout << "AFTER INSERTING*****" << endl;
+  cout << "rootPid: " << test.getRootPid() << endl;
+  cout << "treeHeight: " << test.getTreeHeight() << endl << endl;
 
   //print out all keys on leaf level
   IndexCursor cursor;
