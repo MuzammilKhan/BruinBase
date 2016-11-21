@@ -43,7 +43,6 @@ RC BTreeIndex::open(const string& indexname, char mode)
 	// if index file doesn't exist, this is the first time this tree is being used
 	// ^possibly reinitalize rootPid and treeHeight to be sure of values?
 	if(pf.endPid() <= 0) {
-	  	cout << "Index file doesn't exist, creating it now..." << endl;
 	    rc = pf.write(0, index_buffer);
 		if (rc < 0) {
 			return rc;
@@ -152,7 +151,7 @@ RC BTreeIndex::rec_insert(int key, const RecordId& rid, int currHeight, PageId& 
 
 		rc = rec_insert(key, rid, currHeight + 1, childPid, splitKey, splitPid);
 		if(rc < 0) {
-			// what to do?
+			return rc;
 		}
 
 		// we had a split earlier, so we need to insert this median value
@@ -242,12 +241,10 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 	if(currHeight == treeHeight) {
 		BTLeafNode leaf;
 		if( (rc = leaf.read(nextPid, pf)) < 0) {
-		  cout << "currheight: " << currHeight << " leaf read error: " << rc << endl;
 		  return rc;
 		}
 
 		if( (rc = leaf.locate(searchKey, cursor.eid)) < 0) {
-		  cout << "currheight: " << currHeight << " leaf locate error: " << rc << endl; 
 		  return rc;
 		}
 
@@ -258,13 +255,10 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
 	//recursive step check for errors and go down to leaf
 	BTNonLeafNode nonLeaf;
 	if( (rc = nonLeaf.read(nextPid, pf)) < 0) {
-		cout << "curreheight: " << currHeight << " " << "nonleaf read error: " << rc << endl;
-		cout << "error at this pid: " << nextPid << endl << endl;
 		return rc;
 	}	
 
 	if( (rc = nonLeaf.locateChildPtr(searchKey, nextPid)) < 0) {
-		cout << "curreheight: " << currHeight << " " << "nonleaf locateChildPtr error: " << rc << endl;		
 		return rc;
 	}
 
@@ -292,7 +286,6 @@ RC BTreeIndex::search_tree( int searchKey, IndexCursor& cursor, int currHeight, 
  */
 RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
 {
-	cout << "before locate rootPid: " << rootPid << endl;
 	PageId tempID = rootPid; // so root doesnt get changed
 	return search_tree(searchKey, cursor, 1, tempID); 
 }

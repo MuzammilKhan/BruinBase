@@ -95,7 +95,7 @@ class BTreeIndex {
    */
   RC readForward(IndexCursor& cursor, int& key, RecordId& rid);
 
-  // THE FOLLOWING ARE FOR TESTING - REMOVE LATER
+  // THE FOLLOWING ARE FOR TESTING
   int getTreeHeight();
 
   PageId getRootPid();

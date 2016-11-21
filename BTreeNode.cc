@@ -237,26 +237,6 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 	return 0; 
 }
 
-void BTLeafNode::print()
-{
-	//This is the size in bytes of an entry pair
-	int pairSize = sizeof(RecordId) + sizeof(int);
-	
-	char* temp = buffer;
-	cout << "L ";
-
-	for(int i=0; i<getKeyCount()*pairSize; i+=pairSize)
-	{
-		int insideKey;
-		memcpy(&insideKey, temp, sizeof(int)); //Save the current key inside buffer as insideKey
-		
-		cout << insideKey << " ";
-		
-		temp += pairSize; 
-	}
-	
-	//cout << "" << endl;
-}
 
 BTNonLeafNode::BTNonLeafNode(){ //(PageId pid){
 	std::fill(buffer, buffer+ PageFile::PAGE_SIZE, -1); //Initialize buffer to some value
@@ -476,26 +456,4 @@ RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
 	memcpy(bufptr + pageIdSize + intSize, &pid2, pageIdSize);
 
 	return 0;
-}
-
-void BTNonLeafNode::print()
-{
-	//This is the size in bytes of an entry pair
-	int pairSize = sizeof(PageId) + sizeof(int);
-	
-	//Skip the first 8 offset bytes, since there's no key there
-	char* temp = buffer + sizeof(PageId);
-
-	cout << "N ";
-	for(int i=0; i<getKeyCount()*pairSize; i+=pairSize)
-	{
-		int insideKey;
-		memcpy(&insideKey, temp, sizeof(int)); //Save the current key inside buffer as insideKey
-
-		cout << insideKey << " ";
-		
-		temp += pairSize; //Jump temp over to the next key
-	}
-	
-	//cout << "" << endl;	
 }
