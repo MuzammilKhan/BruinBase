@@ -145,6 +145,7 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
   string value;
   int    count; //line number in load file
   string line;
+  BTreeIndex btree;
 
   // open the table file
   if ((rc = rf.open(table + ".tbl", 'w')) < 0) {
@@ -156,7 +157,16 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
   try {
     ifs.open(loadfile.c_str(), ifstream::in);
   } catch(...) {
+      rf.close();
     return RC_FILE_OPEN_FAILED;
+  }
+
+  //open index
+  if(index && (rc = btree.open((table + ".idx").c_str(), 'w')) < 0) {
+    fprintf(stderr, "Error: failed to open b+tree index for table %s \n", table.c_str());
+    rf.close();
+    ifs.close(); 
+    return rc;
   }
 
   //insert data 
@@ -169,6 +179,7 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
       fprintf(stderr, "Error: Unable to parse input file %s at line %d\n", loadfile.c_str(), count);
       rf.close();
       ifs.close();
+      if(index){ btree.close();}
       return rc;
     }
 
@@ -176,16 +187,24 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
       fprintf(stderr, "Error: Unable to insert data to table %s at line %d of %s\n", table.c_str(), count, loadfile.c_str());
       rf.close();
       ifs.close();
+      if(index){ btree.close();}
       return rc;
     }
 
-
+    if(index && (rc = btree.insert(key,rid)) < 0) {
+    fprintf(stderr, "Error: Unable to insert data into index for input file %s at line %d\n", loadfile.c_str(), count);
+      rf.close();
+      ifs.close();
+      btree.close();
+      return rc;
+    }
     count++;
   }
 
 
   rf.close();
   ifs.close();
+  btree.close();
   return 0;
 }
 
