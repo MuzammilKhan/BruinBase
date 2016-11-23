@@ -13,6 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <limits.h>
+#include <set>
 #include "Bruinbase.h"
 #include "SqlEngine.h"
 #include "BTreeIndex.h"
@@ -83,9 +84,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   // the B+ tree gives us no benefit if:
   //  1. there are no key conds
   // additional gains
-  //  1. if no value conds, possibly save reading record file? <- look into this
+  //  1. if no value conds, save reading record file
 
   bool anyConds = false; // assume no conditions initially
+  bool valConds = false; // assume no value conditions initally
   int k_min = INT_MIN;
   int k_max = INT_MAX;
   int v_min = INT_MIN;
@@ -103,6 +105,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   int cur_v; // value of the current cond
   int cur_attr; // attr of the current cond
   bool contradiction = false;
+
+  set<int> value_ne;
 
   for (int i = 0; i < cond.size(); i++) {
     cur_cond = cond[i];
@@ -125,12 +129,12 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
             k_eq = cur_v;
           }
           break;
-        case SelCond::NE:
-          // we can deal with this later as long as it doesn't contradict EQ
-          if (k_eq_set && cur_v == k_eq) {
-            contradiction = true;
-          }
-          break;
+        // case SelCond::NE:
+        //   // we can deal with this later as long as it doesn't contradict EQ
+        //   if (k_eq_set && cur_v == k_eq) {
+        //     contradiction = true;
+        //   }
+        //   break;
         case SelCond::GT:
           // possibly increase minimum and possibly mark it as noninclusive
           if (cur_v >= k_min) {
@@ -167,6 +171,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       // e.g. (1, 1] or [1,1) has no possible values
       if ((!k_min_inclusive || !k_max_inclusive) && k_min == k_max) contradiction = true;
     } else { // dealing with a value constraint
+      valConds = true; // there is some valid value constraint
       switch (cur_cond.comp) {
         case SelCond::EQ:
           // set equality variable if not set, check for contradiction
@@ -184,6 +189,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
           // we can deal with this later as long as it doesn't contradict EQ
           if (v_eq_set && cur_v == v_eq) {
             contradiction = true;
+          } else {
+            value_ne.insert(cur_v);
           }
           break;
         case SelCond::GT:
@@ -301,16 +308,90 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       ++rid;
     }
   } else { // we have an index, so use that
-
-
     IndexCursor c; // to iterate through tree
+
+    // need to locate entry point into tree
+    if (k_eq_set) {
+      tree.locate(k_eq, c);
+    } else if (k_min_inclusive) {
+      tree.locate(k_min, c);
+    } else if (!k_min_inclusive) {
+      tree.locate(k_min + 1, c);
+    } else {
+      tree.locate(INT_MIN, c); // maybe start at 0?
+    }
+
+    bool done = false, next_iteration = false;
+
+    // keep reading while there are elements and we haven't yet terminated
+    while (tree.readForward(c, key, rid) == 0) {
+      // check if key is within bounds
+      if ((k_eq_set && key != k_eq) ||
+         (k_min_inclusive && key < k_min)  ||
+         (!k_min_inclusive && key <= k_min)  ||
+         (k_max_inclusive && key > k_max) ||
+         (!k_max_inclusive && key >= k_max)) {
+        break;
+      }
+
+      // if there are no value conditions, and we don't need to print anything, we can just continue here
+      if (!valConds && attr == 4) {
+        count++;
+        continue;
+      }
+        
+      // read in value from record file
+      rc = rf.read(rid, key, value);
+      if (rc < 0) {
+        break; // something went wrong
+      }
+
+      int conv_v = atoi(value.c_str());
+
+      // check if value is within bounds
+      if ((v_eq_set && conv_v != v_eq) ||
+         (v_min_inclusive && conv_v < v_min)  ||
+         (!v_min_inclusive && conv_v <= v_min)  ||
+         (v_max_inclusive && conv_v > v_max) ||
+         (!v_max_inclusive && conv_v >= v_max)) {
+        continue;
+      }
+
+      // need to check that value is not within the NE variables
+      if (value_ne.find(conv_v) != value_ne.end()) {
+        continue;
+      }
+
+      // the condition is met for the tuple. 
+      // increase matching tuple counter
+      count++;
+
+      // print the tuple 
+      switch (attr) {
+        case 1:  // SELECT key
+          fprintf(stdout, "%d\n", key);
+          break;
+        case 2:  // SELECT value
+          fprintf(stdout, "%s\n", value.c_str());
+          break;
+        case 3:  // SELECT *
+          fprintf(stdout, "%d '%s'\n", key, value.c_str());
+          break;
+      }
+    }
+
+    tree.close();
   }
 
-  // print matching tuple count if "select count(*)"
-  if (attr == 4) {
-    fprintf(stdout, "%d\n", count);
+  // enter this if everything was ok
+  if (!contradiction && rc == 0) {
+    // do stuff
+    // print matching tuple count if "select count(*)"
+    if (attr == 4) {
+      fprintf(stdout, "%d\n", count);
+    }
+    rc = 0;
   }
-  rc = 0;
 
   // close the table file and return
   exit_select:
