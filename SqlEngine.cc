@@ -12,9 +12,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
+#include <limits.h>
 #include "Bruinbase.h"
 #include "SqlEngine.h"
 #include "BTreeIndex.h"
+
 
 using namespace std;
 
@@ -35,10 +37,16 @@ RC SqlEngine::run(FILE* commandline)
   return 0;
 }
 
+// attr:
+// 1 = key
+// 2 = value
+// 3 = *
+// 4 = COUNT(*)
 RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 {
   RecordFile rf;   // RecordFile containing the table
   RecordId   rid;  // record cursor for table scanning
+  BTreeIndex tree;
 
   RC     rc;
   int    key;     
@@ -52,71 +60,250 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     return rc;
   }
 
-  // scan the table file from the beginning
   rid.pid = rid.sid = 0;
   count = 0;
-  while (rid < rf.endRid()) {
-    // read the tuple
-    if ((rc = rf.read(rid, key, value)) < 0) {
-      fprintf(stderr, "Error: while reading a tuple from table %s\n", table.c_str());
-      goto exit_select;
-    }
 
-    // check the conditions on the tuple
-    for (unsigned i = 0; i < cond.size(); i++) {
-      // compute the difference between the tuple value and the condition value
-      switch (cond[i].attr) {
-      case 1:
-	diff = key - atoi(cond[i].value);
-	break;
-      case 2:
-	diff = strcmp(value.c_str(), cond[i].value);
-	break;
+  // struct SelCond {
+  //   int attr;       // 1 means "key" attribute. 2 means "value" attribute.
+  //   enum Comparator { EQ, NE, LT, GT, LE, GE } comp;
+  //   char* value;    // the value to compare
+  // };
+
+  // conditions in cond must be ANDed together
+  // iterate through cond and find tightest bound
+  // for both keys and values, we either will have: 
+  //  1. a specific value to be equal to
+  //  2. a min -> max range (either could be inclusive or not), with
+  //    a) value(s) to not be equal to
+  //    b) nothing else extra
+  // can have contradictions, resulting in no tuples
+  //  1. an EQ outside of the specified range
+  //  2. an EQ and NQ on same value
+  //  3. contradicting ranges
+  // the B+ tree gives us no benefit if:
+  //  1. there are no key conds
+  // additional gains
+  //  1. if no value conds, possibly save reading record file? <- look into this
+
+  bool anyConds = false; // assume no conditions initially
+  int k_min = INT_MIN;
+  int k_max = INT_MAX;
+  int v_min = INT_MIN;
+  int v_max = INT_MAX;
+  bool k_min_inclusive = true; // assume initially GE
+  bool k_max_inclusive = true; // assume initially LE
+  bool v_min_inclusive = true; // assume initially GE
+  bool v_max_inclusive = true; // assume initially LE
+  int k_eq; // key must be equal to this
+  int v_eq; // value must be equal to this
+  bool k_eq_set = false;
+  bool v_eq_set = false;
+
+  SelCond cur_cond;
+  int cur_v; // value of the current cond
+  int cur_attr; // attr of the current cond
+  bool contradiction = false;
+
+  for (int i = 0; i < cond.size(); i++) {
+    cur_cond = cond[i];
+    cur_v = atoi(cur_cond.value);
+    cur_attr = cur_cond.attr; // 1 for key, 2 for value
+
+    // dealing with a key constraint
+    if (cur_attr == 1) {
+      anyConds = true; // there is at least one valid key constraint
+      switch (cur_cond.comp) {
+        case SelCond::EQ:
+          // set equality variable if not set, check for contradiction
+          if (k_eq_set) {
+            if (k_eq != cur_v) {
+              contradiction = true;
+            }
+            // otherwise this is an equality constraint for the same value, so its ok
+          } else { // a new equality constraint
+            k_eq_set = true;
+            k_eq = cur_v;
+          }
+          break;
+        case SelCond::NE:
+          // we can deal with this later as long as it doesn't contradict EQ
+          if (k_eq_set && cur_v == k_eq) {
+            contradiction = true;
+          }
+          break;
+        case SelCond::GT:
+          // possibly increase minimum and possibly mark it as noninclusive
+          if (cur_v >= k_min) {
+            k_min = cur_v;
+            k_min_inclusive = false;
+          }
+          break;
+        case SelCond::LT:
+          // possibly decrease maximum and possibly mark it as noninclusive
+          if (cur_v <= k_max) {
+            k_max = cur_v;
+            k_max_inclusive = false;
+          }
+          break;
+        case SelCond::GE:
+          // possibly increase minimum and possibly mark it as inclusive
+          if (cur_v > k_min) {
+            k_min = cur_v;
+            k_min_inclusive = true;
+          }
+          break;
+        case SelCond::LE:
+          // possibly decrease maximum and possibly mark it as inclusive
+          if (cur_v < k_max) {
+            k_max = cur_v;
+            k_max_inclusive = true;
+          }
+          break;
       }
 
-      // skip the tuple if any condition is not met
-      switch (cond[i].comp) {
-      case SelCond::EQ:
-	if (diff != 0) goto next_tuple;
-	break;
-      case SelCond::NE:
-	if (diff == 0) goto next_tuple;
-	break;
-      case SelCond::GT:
-	if (diff <= 0) goto next_tuple;
-	break;
-      case SelCond::LT:
-	if (diff >= 0) goto next_tuple;
-	break;
-      case SelCond::GE:
-	if (diff < 0) goto next_tuple;
-	break;
-      case SelCond::LE:
-	if (diff > 0) goto next_tuple;
-	break;
+      // range contradiction
+      if (k_min > k_max) contradiction = true;
+
+      // e.g. (1, 1] or [1,1) has no possible values
+      if ((!k_min_inclusive || !k_max_inclusive) && k_min == k_max) contradiction = true;
+    } else { // dealing with a value constraint
+      switch (cur_cond.comp) {
+        case SelCond::EQ:
+          // set equality variable if not set, check for contradiction
+          if (v_eq_set) {
+            if (v_eq != cur_v) {
+              contradiction = true;
+            }
+            // otherwise this is an equality constraint for the same value, so its ok
+          } else { // a new equality constraint
+            v_eq_set = true;
+            v_eq = cur_v;
+          }
+          break;
+        case SelCond::NE:
+          // we can deal with this later as long as it doesn't contradict EQ
+          if (v_eq_set && cur_v == v_eq) {
+            contradiction = true;
+          }
+          break;
+        case SelCond::GT:
+          // possibly increase minimum and possibly mark it as noninclusive
+          if (cur_v >= v_min) {
+            v_min = cur_v;
+            v_min_inclusive = false;
+          }
+          break;
+        case SelCond::LT:
+          // possibly decrease maximum and possibly mark it as noninclusive
+          if (cur_v <= v_max) {
+            v_max = cur_v;
+            v_max_inclusive = false;
+          }
+          break;
+        case SelCond::GE:
+          // possibly increase minimum and possibly mark it as inclusive
+          if (cur_v > v_min) {
+            v_min = cur_v;
+            v_min_inclusive = true;
+          }
+          break;
+        case SelCond::LE:
+          // possibly decrease maximum and possibly mark it as inclusive
+          if (cur_v < v_max) {
+            v_max = cur_v;
+            v_max_inclusive = true;
+          }
+          break;
       }
+
+      // range contradiction
+      if (v_min > v_max) contradiction = true;
+
+      // e.g. (1, 1] or [1,1) has no possible values
+      if ((!v_min_inclusive || !v_max_inclusive) && v_min == v_max) contradiction = true;
     }
 
-    // the condition is met for the tuple. 
-    // increase matching tuple counter
-    count++;
-
-    // print the tuple 
-    switch (attr) {
-    case 1:  // SELECT key
-      fprintf(stdout, "%d\n", key);
-      break;
-    case 2:  // SELECT value
-      fprintf(stdout, "%s\n", value.c_str());
-      break;
-    case 3:  // SELECT *
-      fprintf(stdout, "%d '%s'\n", key, value.c_str());
-      break;
+    if (contradiction) {
+      rc = rf.close();
+      // if (rc < 0) {
+      //   return rc;
+      // }
+      return RC_INVALID_ATTRIBUTE; // CHECK if this is correct return attr
     }
+  }
 
-    // move to the next tuple
-    next_tuple:
-    ++rid;
+  rc = tree.open(table + ".idx", 'r');
+
+  // do normal select routine if index file not found or no key conds to select on
+  if (rc < 0 || !anyConds) {
+    // scan the table file from the beginning
+    while (rid < rf.endRid()) {
+      // read the tuple
+      if ((rc = rf.read(rid, key, value)) < 0) {
+        fprintf(stderr, "Error: while reading a tuple from table %s\n", table.c_str());
+        goto exit_select;
+      }
+
+      // check the conditions on the tuple
+      for (unsigned i = 0; i < cond.size(); i++) {
+        // compute the difference between the tuple value and the condition value
+        switch (cond[i].attr) {
+          case 1:
+            diff = key - atoi(cond[i].value);
+            break;
+          case 2:
+            diff = strcmp(value.c_str(), cond[i].value);
+            break;
+        }
+
+        // skip the tuple if any condition is not met
+        switch (cond[i].comp) {
+          case SelCond::EQ:
+            if (diff != 0) goto next_tuple;
+            break;
+          case SelCond::NE:
+            if (diff == 0) goto next_tuple;
+            break;
+          case SelCond::GT:
+            if (diff <= 0) goto next_tuple;
+            break;
+          case SelCond::LT:
+            if (diff >= 0) goto next_tuple;
+            break;
+          case SelCond::GE:
+            if (diff < 0) goto next_tuple;
+            break;
+          case SelCond::LE:
+            if (diff > 0) goto next_tuple;
+            break;
+        }
+      }
+
+      // the condition is met for the tuple. 
+      // increase matching tuple counter
+      count++;
+
+      // print the tuple 
+      switch (attr) {
+        case 1:  // SELECT key
+          fprintf(stdout, "%d\n", key);
+          break;
+        case 2:  // SELECT value
+          fprintf(stdout, "%s\n", value.c_str());
+          break;
+        case 3:  // SELECT *
+          fprintf(stdout, "%d '%s'\n", key, value.c_str());
+          break;
+      }
+
+      // move to the next tuple
+      next_tuple:
+      ++rid;
+    }
+  } else { // we have an index, so use that
+
+
+    IndexCursor c; // to iterate through tree
   }
 
   // print matching tuple count if "select count(*)"
