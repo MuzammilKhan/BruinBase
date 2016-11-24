@@ -28,7 +28,7 @@ int sqlparse(void);
 
 RC SqlEngine::run(FILE* commandline)
 {
-  fprintf(stdout, "Bruinbase> ");
+  //fprintf(stdout, "Bruinbase> ");
 
   // set the command line input and start parsing user input
   sqlin = commandline;
@@ -45,6 +45,8 @@ RC SqlEngine::run(FILE* commandline)
 // 4 = COUNT(*)
 RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 {
+  fprintf(stderr, "\n*****SELECT DEBUG PRINTS******");
+
   RecordFile rf;   // RecordFile containing the table
   RecordId   rid;  // record cursor for table scanning
   BTreeIndex tree;
@@ -63,7 +65,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   rid.pid = rid.sid = 0;
   count = 0;
-  fprintf(stderr, "Debug: rid.pid: %d rid.sid= %d\n", rid.pid, rid.sid);
+  //fprintf(stderr, "Debug: rid.pid: %d rid.sid= %d\n", rid.pid, rid.sid);
 
   // struct SelCond {
   //   int attr;       // 1 means "key" attribute. 2 means "value" attribute.
@@ -113,6 +115,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     cur_cond = cond[i];
     cur_v = atoi(cur_cond.value);
     cur_attr = cur_cond.attr; // 1 for key, 2 for value
+    //fprintf(stderr, "value in cond %d: %d\n", i, cur_v);
 
     // dealing with a key constraint
     if (cur_attr == 1) {
@@ -139,6 +142,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::GT:
           // possibly increase minimum and possibly mark it as noninclusive
           if (cur_v >= k_min) {
+            //fprintf(stderr, "IN KEY GT CASE, setting min as: %d\n", cur_v);
             k_min = cur_v;
             k_min_inclusive = false;
           }
@@ -231,6 +235,9 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       if ((!v_min_inclusive || !v_max_inclusive) && v_min == v_max) contradiction = true;
     }
 
+    //fprintf(stderr, "KEY MIN: %d, KEY MAX: %d, KMIN INCLUSIVE: %d, KMAX INCLUSIVE: %d, CONTR: %d\n", 
+    //        k_min, k_max, k_min_inclusive, k_max_inclusive, contradiction);
+
     if (contradiction) {
       rc = rf.close();
       // if (rc < 0) {
@@ -242,7 +249,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   rc = tree.open(table + ".idx", 'r');
 
-  fprintf(stderr, "Debug: attempt to open tree %d\n", rc);
+  //fprintf(stderr, "Debug: attempt to open tree %d\n", rc);
   // do normal select routine if index file not found or no key conds to select on
   if (rc < 0 || !anyConds) {
     fprintf(stderr, "Debug: do normal select routine\n");
@@ -294,7 +301,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       count++;
 
       // print the tuple 
-      fprintf(stderr, "Debug: Check if we should print tuple\n");
+      // fprintf(stderr, "Debug: Check if we should print tuple\n");
       switch (attr) {
         case 1:  // SELECT key
           fprintf(stdout, "%d\n", key);
@@ -315,8 +322,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     IndexCursor c; // to iterate through tree
     c.eid = 0; // set default values
     c.pid = 1; // page 0 is index
-    fprintf(stderr, "Debug: using index\n");
-    fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
+    //fprintf(stderr, "Debug: using index\n");
+    // fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
     // need to locate entry point into tree
     if (k_eq_set) {
       tree.locate(k_eq, c);
@@ -327,14 +334,15 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     } else {
       tree.locate(INT_MIN, c); // maybe start at 0?
     }
-    fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
+    //fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
     bool done = false, next_iteration = false;
 
     // keep reading while there are elements and we haven't yet terminated
-    fprintf(stderr, "Debug: keep reading\n");
+    //fprintf(stderr, "Debug: keep reading\n");
     while (rc = tree.readForward(c, key, rid) == 0) {
       // check if key is within bounds
-      fprintf(stderr, "Debug: in while\n");
+      // fprintf(stderr, "Debug: in while\n");
+      // fprintf(stderr, "   KEY VALUE: %d\n", key);
       if ((k_eq_set && key != k_eq) ||
          (k_min_inclusive && key < k_min)  ||
          (!k_min_inclusive && key <= k_min)  ||
@@ -342,21 +350,19 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
          (!k_max_inclusive && key >= k_max)) {
         break;
       }
-      fprintf(stderr, "Debug: after keep reading: rc = %d\n", rc);
-      fprintf(stderr, "Debug: rid.pid: %d, rid.sid: %d\n", rid.pid, rid.sid);
+      // fprintf(stderr, "Debug: after keep reading: rc = %d\n", rc);
+      // fprintf(stderr, "Debug: rid.pid: %d, rid.sid: %d\n", rid.pid, rid.sid);
 
       // if there are no value conditions, and we don't need to print anything, we can just continue here
       if (!valConds && attr == 4) {
-	fprintf(stderr, "Debug: No value conditions, continue\n");
         count++;
         continue;
       }
         
       // read in value from record file
-      fprintf(stderr, "Debug: read in value from record file\n");
       rc = rf.read(rid, key, value);
       if (rc < 0) {
-	fprintf(stderr, "Debug: read record file failed rc: %d rid.sid: %d rid.pid: %d\n", rc,rid.sid, rid.pid);
+	     //fprintf(stderr, "Debug: read record file failed rc: %d rid.sid: %d rid.pid: %d\n", rc,rid.sid, rid.pid);
         break; // something went wrong
       }
 
@@ -368,20 +374,20 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
          (!v_min_inclusive && conv_v <= v_min)  ||
          (v_max_inclusive && conv_v > v_max) ||
          (!v_max_inclusive && conv_v >= v_max)) {
-        fprintf(stderr, "Debug: check within bounds and continuing\n");
+        // fprintf(stderr, "Debug: check within bounds and continuing\n");
 	continue;
       }
 
       // need to check that value is not within the NE variables
       if (value_ne.find(conv_v) != value_ne.end()) {
-	fprintf(stderr, "Debug: Value within NE variables, continuing\n");
+	// fprintf(stderr, "Debug: Value within NE variables, continuing\n");
         continue;
       }
 
       // the condition is met for the tuple. 
       // increase matching tuple counter
       count++;
-      fprintf(stderr, "Debug: Index -- Check if there is a tuple to print\n");
+      // fprintf(stderr, "Debug: Index -- Check if there is a tuple to print\n");
       // print the tuple 
       switch (attr) {
         case 1:  // SELECT key
@@ -409,6 +415,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     rc = 0;
   }
 
+  fprintf(stderr, "\n*******DONE SELECT DEBUG******");
+
   // close the table file and return
   exit_select:
   rf.close();
@@ -417,6 +425,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
 RC SqlEngine::load(const string& table, const string& loadfile, bool index)
 {
+  fprintf(stderr, "*****LOAD DEBUG PRINTS******\n");
   /* your code here */
   RecordFile rf;   // RecordFile containing the table
   RecordId   rid;  // record cursor for table scanning
@@ -468,7 +477,7 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
       return rc;
     }
 
-    fprintf(stderr, "key: %d, value: %s\n", key, value.c_str());
+    // fprintf(stderr, "key: %d, value: %s\n", key, value.c_str());
 
     if((rc = rf.append(key,value,rid)) < 0) {
       fprintf(stderr, "Error: Unable to insert data to table %s at line %d of %s\n", table.c_str(), count, loadfile.c_str());
@@ -478,7 +487,7 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
       return rc;
     }
 
-    fprintf(stderr, "rid pid: %d, rid sid: %d", rid.pid, rid.sid );
+    //fprintf(stderr, "rid pid: %d, rid sid: %d", rid.pid, rid.sid );
 
     if(index && (rc = btree.insert(key,rid)) < 0) {
     fprintf(stderr, "Error: Unable to insert data into index for input file %s at line %d\n", loadfile.c_str(), count);
@@ -490,18 +499,19 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
     count++;
   }
 
-  if(index) {
-    fprintf(stderr, "keys: ");
-    IndexCursor cursor;
-    cursor.eid = 0;
-    cursor.pid = 1; //double check these
-    int keytest;
-    RecordId ridtest;
-    while(btree.readForward(cursor, keytest ,ridtest) == 0) {
-      fprintf(stderr, "%d ",keytest);
-    }
-    fprintf(stderr, "*****DONE PRINTING****\n\n");
-  }
+  // if(index) {
+  //   fprintf(stderr, "keys: ");
+  //   IndexCursor cursor;
+  //   cursor.eid = 0;
+  //   cursor.pid = 1; //double check these
+  //   int keytest;
+  //   RecordId ridtest;
+  //   while(btree.readForward(cursor, keytest ,ridtest) == 0) {
+  //     fprintf(stderr, "%d ",keytest);
+  //   }
+  // }
+
+    fprintf(stderr, "\n*****DONE PRINTING LOAD****\n\n");
 
   rf.close();
   ifs.close();
