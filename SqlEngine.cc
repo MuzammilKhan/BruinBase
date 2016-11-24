@@ -313,6 +313,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     }
   } else { // we have an index, so use that
     IndexCursor c; // to iterate through tree
+    c.eid = 0; // set default values
+    c.pid = 1; // page 0 is index
     fprintf(stderr, "Debug: using index\n");
     fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
     // need to locate entry point into tree
@@ -498,7 +500,7 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
     while(btree.readForward(cursor, keytest ,ridtest) == 0) {
       fprintf(stderr, "%d ",keytest);
     }
-    fprintf(stderr, "*****DONE PRINTIN****");
+    fprintf(stderr, "*****DONE PRINTING****\n\n");
   }
 
   rf.close();
