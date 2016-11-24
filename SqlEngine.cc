@@ -240,9 +240,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   }
 
   rc = tree.open(table + ".idx", 'r');
-
+  fprintf(stderr, "Debug: attempt to open tree %d\n", rc);
   // do normal select routine if index file not found or no key conds to select on
   if (rc < 0 || !anyConds) {
+    fprintf(stderr, "Debug: do normal select routine\n");
     // scan the table file from the beginning
     while (rid < rf.endRid()) {
       // read the tuple
@@ -291,6 +292,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       count++;
 
       // print the tuple 
+      fprintf(stderr, "Debug: Check if we should print tuple\n");
       switch (attr) {
         case 1:  // SELECT key
           fprintf(stdout, "%d\n", key);
@@ -309,7 +311,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     }
   } else { // we have an index, so use that
     IndexCursor c; // to iterate through tree
-
+    fprintf(stderr, "Debug: using index\n");
     // need to locate entry point into tree
     if (k_eq_set) {
       tree.locate(k_eq, c);
@@ -324,8 +326,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     bool done = false, next_iteration = false;
 
     // keep reading while there are elements and we haven't yet terminated
+    fprintf(stderr, "Debug: keep reading\n");
     while (tree.readForward(c, key, rid) == 0) {
       // check if key is within bounds
+      fprintf(stderr, "Debug: in while\n");
       if ((k_eq_set && key != k_eq) ||
          (k_min_inclusive && key < k_min)  ||
          (!k_min_inclusive && key <= k_min)  ||
@@ -333,16 +337,20 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
          (!k_max_inclusive && key >= k_max)) {
         break;
       }
+      fprintf(stderr, "Debug: after keep reading\n");
 
       // if there are no value conditions, and we don't need to print anything, we can just continue here
       if (!valConds && attr == 4) {
+	fprintf(stderr, "Debug: No value conditions, continue\n");
         count++;
         continue;
       }
         
       // read in value from record file
+      fprintf(stderr, "Debug: read in value from record file\n");
       rc = rf.read(rid, key, value);
       if (rc < 0) {
+	fprintf(stderr, "Debug: read record file failed rc: %d rid.sid: %d rid.pid: %d\n", rc,rid.sid, rid.pid);
         break; // something went wrong
       }
 
@@ -354,18 +362,20 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
          (!v_min_inclusive && conv_v <= v_min)  ||
          (v_max_inclusive && conv_v > v_max) ||
          (!v_max_inclusive && conv_v >= v_max)) {
-        continue;
+        fprintf(stderr, "Debug: check within bounds and continuing\n");
+	continue;
       }
 
       // need to check that value is not within the NE variables
       if (value_ne.find(conv_v) != value_ne.end()) {
+	fprintf(stderr, "Debug: Value within NE variables, continuing\n");
         continue;
       }
 
       // the condition is met for the tuple. 
       // increase matching tuple counter
       count++;
-
+      fprintf(stderr, "Debug: Index -- Check if there is a tuple to print\n");
       // print the tuple 
       switch (attr) {
         case 1:  // SELECT key
