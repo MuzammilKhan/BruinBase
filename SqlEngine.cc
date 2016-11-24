@@ -142,6 +142,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::GT:
           // possibly increase minimum and possibly mark it as noninclusive
           if (cur_v >= k_min) {
+            if(k_eq_set && k_eq <= cur_v) {
+              contradiction = true;
+              break;
+            }
             //fprintf(stderr, "IN KEY GT CASE, setting min as: %d\n", cur_v);
             k_min = cur_v;
             k_min_inclusive = false;
@@ -150,6 +154,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::LT:
           // possibly decrease maximum and possibly mark it as noninclusive
           if (cur_v <= k_max) {
+            if(k_eq_set && k_eq >= cur_v) {
+              contradiction = true;
+              break;
+            }
             k_max = cur_v;
             k_max_inclusive = false;
           }
@@ -157,6 +165,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::GE:
           // possibly increase minimum and possibly mark it as inclusive
           if (cur_v > k_min) {
+            if(k_eq_set && k_eq < cur_v) {
+              contradiction = true;
+              break;
+            }
             k_min = cur_v;
             k_min_inclusive = true;
           }
@@ -164,6 +176,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::LE:
           // possibly decrease maximum and possibly mark it as inclusive
           if (cur_v < k_max) {
+            if(k_eq_set && k_eq > cur_v) {
+              contradiction = true;
+              break;
+            }
             k_max = cur_v;
             k_max_inclusive = true;
           }
