@@ -63,6 +63,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   rid.pid = rid.sid = 0;
   count = 0;
+  fprintf(stderr, "Debug: rid.pid: %d rid.sid= %d\n", rid.pid, rid.sid);
 
   // struct SelCond {
   //   int attr;       // 1 means "key" attribute. 2 means "value" attribute.
@@ -313,6 +314,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   } else { // we have an index, so use that
     IndexCursor c; // to iterate through tree
     fprintf(stderr, "Debug: using index\n");
+    fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
     // need to locate entry point into tree
     if (k_eq_set) {
       tree.locate(k_eq, c);
@@ -323,12 +325,12 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     } else {
       tree.locate(INT_MIN, c); // maybe start at 0?
     }
-
+    fprintf(stderr, "Debug: rid: %d sid: %d\n", rid.sid, rid.pid);
     bool done = false, next_iteration = false;
 
     // keep reading while there are elements and we haven't yet terminated
     fprintf(stderr, "Debug: keep reading\n");
-    while (tree.readForward(c, key, rid) == 0) {
+    while (rc = tree.readForward(c, key, rid) == 0) {
       // check if key is within bounds
       fprintf(stderr, "Debug: in while\n");
       if ((k_eq_set && key != k_eq) ||
@@ -338,7 +340,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
          (!k_max_inclusive && key >= k_max)) {
         break;
       }
-      fprintf(stderr, "Debug: after keep reading\n");
+      fprintf(stderr, "Debug: after keep reading: rc = %d\n", rc);
+      fprintf(stderr, "Debug: rid.pid: %d, rid.sid: %d\n", rid.pid, rid.sid);
 
       // if there are no value conditions, and we don't need to print anything, we can just continue here
       if (!valConds && attr == 4) {
