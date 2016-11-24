@@ -217,6 +217,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::GT:
           // possibly increase minimum and possibly mark it as noninclusive
           if (cur_v >= v_min) {
+            if (v_eq_set &&  v_eq <= cur_v ) {
+              contradiction = true;
+              break;
+            }
             v_min = cur_v;
             v_min_inclusive = false;
           }
@@ -224,6 +228,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::LT:
           // possibly decrease maximum and possibly mark it as noninclusive
           if (cur_v <= v_max) {
+            if (v_eq_set &&  v_eq >= cur_v ) {
+              contradiction = true;
+              break;
+            }
             v_max = cur_v;
             v_max_inclusive = false;
           }
@@ -231,6 +239,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::GE:
           // possibly increase minimum and possibly mark it as inclusive
           if (cur_v > v_min) {
+            if (v_eq_set &&  v_eq < cur_v ) {
+              contradiction = true;
+              break;
+            }
             v_min = cur_v;
             v_min_inclusive = true;
           }
@@ -238,6 +250,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::LE:
           // possibly decrease maximum and possibly mark it as inclusive
           if (cur_v < v_max) {
+            if (v_eq_set &&  v_eq > cur_v ) {
+              contradiction = true;
+              break;
+            }
             v_max = cur_v;
             v_max_inclusive = true;
           }
