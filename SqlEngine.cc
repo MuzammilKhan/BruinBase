@@ -240,6 +240,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   }
 
   rc = tree.open(table + ".idx", 'r');
+
   fprintf(stderr, "Debug: attempt to open tree %d\n", rc);
   // do normal select routine if index file not found or no key conds to select on
   if (rc < 0 || !anyConds) {
@@ -441,7 +442,7 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
   }
 
   //open index
-  if(index && (rc = btree.open((table + ".idx").c_str(), 'w')) < 0) {
+  if(index && (rc = btree.open(table + ".idx", 'w')) < 0) {
     fprintf(stderr, "Error: failed to open b+tree index for table %s \n", table.c_str());
     rf.close();
     ifs.close(); 
@@ -462,6 +463,8 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
       return rc;
     }
 
+    fprintf(stderr, "key: %d, value: %s\n", key, value.c_str());
+
     if((rc = rf.append(key,value,rid)) < 0) {
       fprintf(stderr, "Error: Unable to insert data to table %s at line %d of %s\n", table.c_str(), count, loadfile.c_str());
       rf.close();
@@ -469,6 +472,8 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
       if(index){ btree.close();}
       return rc;
     }
+
+    fprintf(stderr, "rid pid: %d, rid sid: %d", rid.pid, rid.sid );
 
     if(index && (rc = btree.insert(key,rid)) < 0) {
     fprintf(stderr, "Error: Unable to insert data into index for input file %s at line %d\n", loadfile.c_str(), count);
@@ -480,10 +485,24 @@ RC SqlEngine::load(const string& table, const string& loadfile, bool index)
     count++;
   }
 
+  if(index) {
+    fprintf(stderr, "keys: ");
+    IndexCursor cursor;
+    cursor.eid = 0;
+    cursor.pid = 1; //double check these
+    int keytest;
+    RecordId ridtest;
+    while(btree.readForward(cursor, keytest ,ridtest) == 0) {
+      fprintf(stderr, "%d ",keytest);
+    }
+    fprintf(stderr, "*****DONE PRINTIN****");
+  }
 
   rf.close();
   ifs.close();
-  btree.close();
+  if (index) {
+    btree.close();
+  }
   return 0;
 }
 
