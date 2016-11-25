@@ -110,6 +110,20 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   set<int> value_ne;
 
+  bool other_than_ne = false;
+  bool ne_set = false;
+  for(int i=0; i < cond.size(); i++) {
+      switch (cur_cond.comp) {
+        case SelCond::EQ:
+        case SelCond::GE:
+        case SelCond::LE:
+        case SelCond::GT:
+        case SelCond::LT:
+          other_than_ne = true;
+        case SelCond::NE:
+          ne_set = true;
+  }
+
   for (int i = 0; i < cond.size(); i++) {
     cur_cond = cond[i];
     cur_v = atoi(cur_cond.value);
@@ -136,12 +150,12 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
             k_eq = cur_v;
           }
           break;
-        // case SelCond::NE:
-        //   // we can deal with this later as long as it doesn't contradict EQ
-        //   if (k_eq_set && cur_v == k_eq) {
-        //     contradiction = true;
-        //   }
-        //   break;
+        case SelCond::NE:
+          // we can deal with this later as long as it doesn't contradict EQ
+          if (k_eq_set && cur_v == k_eq) {
+           contradiction = true;
+          }
+          break;
         case SelCond::GT:
           // possibly increase minimum and possibly mark it as noninclusive
           if (cur_v >= k_min) {
@@ -290,8 +304,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   rc = tree.open(table + ".idx", 'r');
 
   //fprintf(stderr, "Debug: attempt to open tree %d\n", rc);
-  // do normal select routine if index file not found
-  if (rc < 0) {
+  // do normal select routine if index file not found or if only NE is set
+  if ((rc < 0) || ((!other_than_ne) && ne_set)){
     fprintf(stderr, "Debug: do normal select routine\n");
     // scan the table file from the beginning
     while (rid < rf.endRid()) {
