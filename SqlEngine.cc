@@ -89,7 +89,6 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   // additional gains
   //  1. if no value conds, save reading record file
 
-  bool anyConds = false; // assume no conditions initially
   bool valConds = false; // assume no value conditions initally
   int k_min = INT_MIN;
   int k_max = INT_MAX;
@@ -119,7 +118,6 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
     // dealing with a key constraint
     if (cur_attr == 1) {
-      anyConds = true; // there is at least one valid key constraint
       switch (cur_cond.comp) {
         case SelCond::EQ:
           // set equality variable if not set, check for contradiction
@@ -292,8 +290,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   rc = tree.open(table + ".idx", 'r');
 
   //fprintf(stderr, "Debug: attempt to open tree %d\n", rc);
-  // do normal select routine if index file not found or no key conds to select on
-  if (rc < 0 || !anyConds) {
+  // do normal select routine if index file not found
+  if (rc < 0) {
     fprintf(stderr, "Debug: do normal select routine\n");
     // scan the table file from the beginning
     while (rid < rf.endRid()) {
