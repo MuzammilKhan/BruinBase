@@ -123,7 +123,12 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       switch (cur_cond.comp) {
         case SelCond::EQ:
           // set equality variable if not set, check for contradiction
-          if (k_eq_set) {
+          if ((k_min_inclusive && cur_v < k_min) ||
+              (!k_min_inclusive && cur_v <= k_min) ||
+              (k_max_inclusive && cur_v > k_max) ||
+              (!k_max_inclusive && cur_v >= k_max)) {
+            contradiction = true;
+          } else if (k_eq_set) {
             if (k_eq != cur_v) {
               contradiction = true;
             }
@@ -196,7 +201,12 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       switch (cur_cond.comp) {
         case SelCond::EQ:
           // set equality variable if not set, check for contradiction
-          if (v_eq_set) {
+          if ((v_min_inclusive && cur_v < v_min) ||
+              (!v_min_inclusive && cur_v <= v_min) ||
+              (v_max_inclusive && cur_v > v_max) ||
+              (!v_max_inclusive && cur_v >= v_max)) {
+            contradiction = true;
+          } else if (v_eq_set) {
             if (v_eq != cur_v) {
               contradiction = true;
             }
