@@ -122,6 +122,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
           other_than_ne = true;
         case SelCond::NE:
           ne_set = true;
+    }
   }
 
   for (int i = 0; i < cond.size(); i++) {
