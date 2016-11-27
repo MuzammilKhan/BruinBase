@@ -92,28 +92,36 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   bool valConds = false; // assume no value conditions initally
   int k_min = INT_MIN;
   int k_max = INT_MAX;
-  int v_min = INT_MIN;
-  int v_max = INT_MAX;
+  string v_min = "";
+  string v_max = "";
   bool k_min_inclusive = true; // assume initially GE
   bool k_max_inclusive = true; // assume initially LE
   bool v_min_inclusive = true; // assume initially GE
   bool v_max_inclusive = true; // assume initially LE
   int k_eq; // key must be equal to this
-  int v_eq; // value must be equal to this
+  string v_eq; // value must be equal to this
   bool k_eq_set = false;
   bool v_eq_set = false;
+  bool v_min_set = false; // need this since there is no min string value
+  bool v_max_set = false; // need this since there is no max string value
 
   SelCond cur_cond;
-  int cur_v; // value of the current cond
   int cur_attr; // attr of the current cond
   bool contradiction = false;
 
-  set<int> value_ne, key_ne;
+  set<string> value_ne;
+  set<int> key_ne;
 
+  // variables for deciding if there are only NE coniditions, so we use normal select
   bool other_than_ne = false;
   bool ne_set = false;
-  for(int i=0; i < cond.size(); i++) {
-      switch (cur_cond.comp) {
+  
+  for (int i = 0; i < cond.size(); i++) {
+    cur_cond = cond[i];
+    cur_attr = cur_cond.attr; // 1 for key, 2 for value
+    //fprintf(stderr, "value in cond %d: %d\n", i, cur_v);
+
+    switch (cur_cond.comp) {
         case SelCond::EQ:
         case SelCond::GE:
         case SelCond::LE:
@@ -123,16 +131,10 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         case SelCond::NE:
           ne_set = true;
     }
-  }
-
-  for (int i = 0; i < cond.size(); i++) {
-    cur_cond = cond[i];
-    cur_v = atoi(cur_cond.value);
-    cur_attr = cur_cond.attr; // 1 for key, 2 for value
-    //fprintf(stderr, "value in cond %d: %d\n", i, cur_v);
 
     // dealing with a key constraint
     if (cur_attr == 1) {
+      int cur_v = atoi(cur_cond.value);
       switch (cur_cond.comp) {
         case SelCond::EQ:
           // set equality variable if not set, check for contradiction
@@ -212,17 +214,18 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       // e.g. (1, 1] or [1,1) has no possible values
       if ((!k_min_inclusive || !k_max_inclusive) && k_min == k_max) contradiction = true;
     } else { // dealing with a value constraint
+      char* cur_v = cur_cond.value;
       valConds = true; // there is some valid value constraint
       switch (cur_cond.comp) {
         case SelCond::EQ:
           // set equality variable if not set, check for contradiction
-          if ((v_min_inclusive && cur_v < v_min) ||
-              (!v_min_inclusive && cur_v <= v_min) ||
-              (v_max_inclusive && cur_v > v_max) ||
-              (!v_max_inclusive && cur_v >= v_max)) {
+          if ((v_min_set && v_min_inclusive && strcmp(cur_v, v_min.c_str()) < 0)  ||
+             (v_min_set && !v_min_inclusive && strcmp(cur_v, v_min.c_str()) <= 0)  ||
+             (v_max_set && v_max_inclusive && strcmp(cur_v, v_max.c_str()) > 0) ||
+             (v_max_set && !v_max_inclusive && strcmp(cur_v, v_max.c_str()) >= 0)) {
             contradiction = true;
           } else if (v_eq_set) {
-            if (v_eq != cur_v) {
+            if (strcmp(v_eq.c_str(), cur_v) != 0) {
               contradiction = true;
             }
             // otherwise this is an equality constraint for the same value, so its ok
@@ -233,63 +236,74 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
           break;
         case SelCond::NE:
           // we can deal with this later as long as it doesn't contradict EQ
-          if (v_eq_set && cur_v == v_eq) {
+          if (v_eq_set && strcmp(cur_v, v_eq.c_str()) == 0) {
             contradiction = true;
           } else {
-            value_ne.insert(cur_v);
+            value_ne.insert(string(cur_v));
           }
           break;
         case SelCond::GT:
           // possibly increase minimum and possibly mark it as noninclusive
-          if (cur_v >= v_min) {
-            if (v_eq_set &&  v_eq <= cur_v ) {
+          if (!v_min_set || strcmp(cur_v, v_min.c_str()) > 0) {
+            if (v_eq_set &&  strcmp(v_eq.c_str(), cur_v) <= 0 ) {
               contradiction = true;
               break;
             }
             v_min = cur_v;
             v_min_inclusive = false;
+            v_min_set = true;
           }
           break;
         case SelCond::LT:
           // possibly decrease maximum and possibly mark it as noninclusive
-          if (cur_v <= v_max) {
-            if (v_eq_set &&  v_eq >= cur_v ) {
+          if (!v_max_set || strcmp(cur_v, v_max.c_str()) <= 0) {
+            if (v_eq_set &&  strcmp(v_eq.c_str(), cur_v) >= 0 ) {
               contradiction = true;
               break;
             }
             v_max = cur_v;
             v_max_inclusive = false;
+            v_max_set = true;
           }
           break;
         case SelCond::GE:
           // possibly increase minimum and possibly mark it as inclusive
-          if (cur_v > v_min) {
-            if (v_eq_set &&  v_eq < cur_v ) {
+          if (!v_min_set || strcmp(cur_v, v_min.c_str()) > 0) {
+            if (v_eq_set &&  strcmp(v_eq.c_str(), cur_v) < 0 ) {
               contradiction = true;
               break;
             }
             v_min = cur_v;
             v_min_inclusive = true;
+            v_min_set = true;
           }
           break;
         case SelCond::LE:
           // possibly decrease maximum and possibly mark it as inclusive
-          if (cur_v < v_max) {
-            if (v_eq_set &&  v_eq > cur_v ) {
+          if (!v_max_set || strcmp(cur_v, v_max.c_str()) < 0) {
+            if (v_eq_set &&  strcmp(v_eq.c_str(), cur_v) > 0 ) {
               contradiction = true;
               break;
             }
             v_max = cur_v;
             v_max_inclusive = true;
+            v_max_set = true;
           }
           break;
       }
 
       // range contradiction
-      if (v_min > v_max) contradiction = true;
+      if ((v_min_set && v_max_set) && 
+          (strcmp(v_min.c_str(), v_max.c_str()) > 0)) {
+        contradiction = true;
+      }
 
       // e.g. (1, 1] or [1,1) has no possible values
-      if ((!v_min_inclusive || !v_max_inclusive) && v_min == v_max) contradiction = true;
+      if ((v_min_set && v_max_set) && 
+          (!v_min_inclusive || !v_max_inclusive) && 
+          (strcmp(v_min.c_str(), v_max.c_str()) == 0)) {
+        contradiction = true;
+      }
     }
 
     //fprintf(stderr, "KEY MIN: %d, KEY MAX: %d, KMIN INCLUSIVE: %d, KMAX INCLUSIVE: %d, CONTR: %d\n", 
@@ -428,20 +442,20 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         break; // something went wrong
       }
 
-      int conv_v = atoi(value.c_str());
+      const char* con_v = value.c_str();
 
       // check if value is within bounds
-      if ((v_eq_set && conv_v != v_eq) ||
-         (v_min_inclusive && conv_v < v_min)  ||
-         (!v_min_inclusive && conv_v <= v_min)  ||
-         (v_max_inclusive && conv_v > v_max) ||
-         (!v_max_inclusive && conv_v >= v_max)) {
+      if ((v_eq_set && strcmp(con_v, v_eq.c_str()) != 0) ||
+         (v_min_set && v_min_inclusive && strcmp(con_v, v_min.c_str()) < 0)  ||
+         (v_min_set && !v_min_inclusive && strcmp(con_v, v_min.c_str()) <= 0)  ||
+         (v_max_set && v_max_inclusive && strcmp(con_v, v_max.c_str()) > 0) ||
+         (v_max_set && !v_max_inclusive && strcmp(con_v, v_max.c_str()) >= 0)) {
         // fprintf(stderr, "Debug: check within bounds and continuing\n");
 	continue;
       }
 
       // need to check that value is not within the NE variables
-      if (value_ne.find(conv_v) != value_ne.end()) {
+      if (value_ne.find(value) != value_ne.end()) {
 	// fprintf(stderr, "Debug: Value within NE variables, continuing\n");
         continue;
       }
