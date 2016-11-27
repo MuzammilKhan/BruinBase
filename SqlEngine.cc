@@ -108,7 +108,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   int cur_attr; // attr of the current cond
   bool contradiction = false;
 
-  set<int> value_ne;
+  set<int> value_ne, key_ne;
 
   bool other_than_ne = false;
   bool ne_set = false;
@@ -155,6 +155,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
           // we can deal with this later as long as it doesn't contradict EQ
           if (k_eq_set && cur_v == k_eq) {
            contradiction = true;
+          } else {
+            key_ne.insert(cur_v);
           }
           break;
         case SelCond::GT:
@@ -404,6 +406,11 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
          (k_max_inclusive && key > k_max) ||
          (!k_max_inclusive && key >= k_max)) {
         break;
+      }
+
+      if (key_ne.find(key) != key_ne.end()) {
+        // fprintf(stderr, "Debug: Value within NE variables, continuing\n");
+        continue;
       }
       // fprintf(stderr, "Debug: after keep reading: rc = %d\n", rc);
       // fprintf(stderr, "Debug: rid.pid: %d, rid.sid: %d\n", rid.pid, rid.sid);
