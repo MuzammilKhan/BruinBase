@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<!-- saved from url=(0058)http://oak.cs.ucla.edu/classes/cs143/project/project2.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!--<base href="http://oak.cs.ucla.edu/classes/cs143/project/">--><base href=".">
+
+  <title>CS 143 Project 2</title>
+  <style type="text/css">
+    .code {
+        background-color:#eeeeee;
+        border: solid 1px #000000;
+        font-family:"Courier New", Courier, mono;
+        font-size: .8em;
+        margin: 5px;
+        padding: 5px;
+    }
+    div.crop {
+        width: 695px;
+        height: 418px;
+        overflow: hidden;
+    }
+</style>
+</head>
+<body lang="EN-US" bgcolor="#FFFFFF">
+
+<h1 align="center"><b>Project 2</b></h1>
+<p align="center">
+<strong>Part A Due Sunday, 11/06/2016 by 11:00PM</strong><br>
+<strong>Part B Due Sunday, 11/13/2016 by 11:00PM</strong><br>
+<strong>Part C Due Sunday, 11/20/2016 by 11:00PM</strong><br>
+<strong>Part D Due Sunday, 11/27/2016 by 11:00PM</strong><br>
+</p>
+
+<!-- <h3>Reminder</h3> -->
+<!--Grace Period Exception: In consideration of completing all grading before the end of quarter, you are NOT allowed to use any grace period in your part D submission.
+5/3/2012 <strong>Our TA, Ying Wang&lt;cs143yw@gmail.com&gt;</strong>, will be in charge of project 2. Please email Ying if you have any feedback about the project. For general questions, please post to our google group. <br>
+5/30/2012 Per Dr. Cho's announcement in the lecture today, you may use at most 2 day grace period in your 2D submission. 
+-->
+
+In this project, you will have to implement B+tree indexes for
+Bruinbase and use them to handle SELECT queries. 
+Towards this goal, you will first download, build, and play with Bruinbase
+to get familiar with it. You will then 
+go over its overall system architecture and the source code
+to learn its internals. Finally, you will implement the code for the B+tree index
+and modify its SQL engine to make Bruinbase use a B+tree for query processing.
+<p></p>
+<!--
+<hr>
+
+<h3>Update your previous submission in later submission </h3>
+<p>For Parts B, C and D submissions, you may find it necessary to change your code submitted for earlier parts due to changes in your design. It is OK to resubmit new code, but keep in mind that the changes to your code should be minimal. In particular, the resubmitted code should share at least 50% of the lines with your earlier submissions (when measured by <tt>diff</tt>). Changes to more than 50% of the lines in your code will lead up to 5% penalty for the resubmitted part.
+</p>
+-->
+<!--
+<p></p>
+<h3>Change history</h3>
+<p>
+<b>May 15, 02:30PM</b>: Added more explanation on <tt>BTreeIndex::insert()</tt> and <tt>SqlEngine::load()</tt> for Parts B and C of the project.<br>
+</p>
+-->
+
+<hr>
+
+<h2>Part 0: Download and Understand Bruinbase</h2>
+
+First, read the <a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/index.html">Bruinbase overview</a> page to download the Bruinbase code and play with it.
+<p>
+
+</p><h3>Understand Bruinbase Architecture</h3> 
+Now that you are familiar with the functionality of Bruinbase, it is time
+to learn its internal architecture. Internally, Bruinbase has the following four core modules:<p> 
+<table cellpadding="5" cellspacing="0" align="center"> 
+<tbody><tr><td style="border: 1px solid #000;" colspan="2" align="center"><b>SqlEngine</b></td></tr> 
+<tr align="center"><td style="border: 1px solid #000;"><b>RecordFile</b></td><td style="border: 1px solid #000;"><b>BTreeIndex</b></td></tr> 
+<tr align="center"><td style="border: 1px solid #000;" colspan="2"><b>PageFile</b></td></tr> 
+</tbody></table> 
+</p><p> 
+
+<b>PageFile</b>: The <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html">PageFile</a></tt> class (implemented
+in <tt>PageFile.h</tt> and
+<tt>PageFile.cc</tt>) at the bottom of the above diagram
+provides page-level access
+to the underlying Unix file system.  
+All file read/write is done in the unit of a page (whose size is set by the <tt>PageFile::PAGE_SIZE</tt> constant, which is 1024).
+That is, even if you want to read/write a few bytes in a file, 
+you have to read the full page that contains the bytes. 
+The <tt>PageFile</tt> module uses the LRU policy to cache
+the most-recently-used 10 pages in the main memory to reduce disk IOs.
+ 
+ 
+</p><p>The following diagram shows the conceptual structure of a PageFile that has
+7 pages: 
+<table align="center"> 
+<tbody><tr> 
+<td align="right">PageId: &nbsp;&nbsp;</td> 
+<td> 
+<table border="0" cellpadding="1" cellspacing="0"> 
+<tbody><tr align="left"> 
+<td width="50">0</td> 
+<td width="50">1</td> 
+<td width="50">2</td> 
+<td width="50">3</td> 
+<td width="50">4</td> 
+<td width="50">5</td> 
+<td width="50">6</td> 
+</tr> 
+</tbody></table> 
+</td> 
+</tr> 
+<tr> 
+<td> 
+&nbsp;
+</td> 
+<td> 
+<table cellpadding="0" cellspacing="0"> 
+<tbody><tr> 
+<td style="border: 1px solid #000;" width="50">&nbsp;<br><br><br></td> 
+<td style="border: 1px solid #000;" width="50">&nbsp;</td> 
+<td style="border: 1px solid #000;" width="50" bgcolor="#a0a0a0">&nbsp;</td> 
+<td style="border: 1px solid #000;" width="50">&nbsp;</td> 
+<td style="border: 1px solid #000;" width="50">&nbsp;</td> 
+<td style="border: 1px solid #000;" width="50">&nbsp;</td> 
+<td style="border: 1px solid #000;" width="50">&nbsp;</td> 
+</tr> 
+</tbody></table> 
+</td> 
+</tr> 
+</tbody></table></p><p> 
+ 
+</p><p>In the above diagram, each rectangle corresponds to a page in the file.
+Every page in a <tt>PageFie</tt> is identified by its <tt>PageId</tt> 
+which is an integer value starting at 0.
+<tt>PageFile</tt> supports the following file access API
+(the complete list of Bruinbase classes and their methods is available as part of the <a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/annotated.html">Bruinbase API documentation</a>):
+ 
+</p><p></p><ul> 
+  <li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html#37b9bd4a8876afb5031b0158504f5749">open()</a></tt>: 
+This function opens a file in the read or write mode. 
+When you open a non-existing file in the write mode, a file with the given name is automatically created.
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html#21807b55638db1f65d233642ce6e8ca3">close()</a></tt>: This function closes the file.
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html#4a8dab8117a1beaee76a574d5df465cf">read()</a></tt>:
+    This functions allows you to read a page in the file into the main memory. 
+    For example, if you want to read the third (grey) page in the above diagram, you will have to call <tt>read()</tt> with PageId=2 with a pointer to a 1024-byte main memory buffer where the page content will be loaded.
+ 
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html#ec1bb5333227bf99f1f564897dea0bea">endPid()</a></tt>:
+    This function returns the ID of the page immediately after the last page in the file. For example, in the above diagram, the call to <tt>endPid()</tt> will return 7 because the last PageId of the file is 6. Therefore, <tt>endPid()==0</tt> indicates that the file is empty and was just created. You can scan an entire PageFile
+    by reading pages from PageId=0 up to immediately before endPid().
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html#cb919e5359817e78aab4baf15e5b7b9e">write()</a></tt>:
+    This function allows you to write the content in main memory to a page in the file. 
+    As its input parameters, you have to provide
+    a pointer to 1024-byte main memory buffer 
+    and a PageId.
+  <ul> 
+     <li>If you write beyond the last PageId of a <tt>PageFile</tt>, the file is automatically expanded to include the page with the given ID. Therefore, if you want to allocate a new page from PageFile, you can call endPid() to obtain the first unallocated PageId and write to that page. This way, a new page will be automatically added at the end of the file.
+  </li></ul> 
+</li></ul> 
+ 
+<p><b>RecordFile</b>: The 
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html">RecordFile</a></tt> 
+class (implemented
+in <tt>RecordFile.h</tt> and
+<tt>RecordFile.cc</tt>) provides record-level access
+to a file. A record in Bruinbase is an integer key and a string value (of length up to 99) pair. 
+Internally, <tt>RecordFile</tt> "splits" each 1024-byte page in <tt>PageFile</tt> into multiple <em>slots</em> and stores a record in one of the slots.
+The following diagram shows the conceptual structure of a RecordFile with a number of (key, value) pairs stored inside:
+ 
+</p><p><table border="0" cellspacing="0" align="center"> 
+<tbody><tr align="left"> 
+<td align="right">PageId:&nbsp;</td> 
+<td>0</td> 
+<td>1</td> 
+<td>2</td> 
+<td>...</td> 
+<td>11</td> 
+</tr> 
+<tr> 
+<td align="right" valign="top">SlotId: 0 &nbsp;<br>1 &nbsp;<br>... &nbsp;</td> 
+<td style="border: 1px solid #000;">key,value<br>key,value<br>...<br>key,value</td> 
+<td style="border: 1px solid #000;"><font color="red">key,value</font><br>key,value<br>...<br>key,value</td> 
+<td style="border: 1px solid #000;">key,value<br>key,value<br>...<br>key,value</td> 
+<td align="center" valign="top" style="border: 1px solid #000;"><font color="white">key,value</font><br>...</td> 
+<td style="border: 1px solid #000;" valign="top">key,value<br></td> 
+</tr> 
+</tbody></table> 
+</p><p> 
+ 
+</p><p>When a record is stored in <tt>RecordFile</tt>, its location is identified by its (PageId, SlotId) pair, which is represented by
+the <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/struct_record_id.html">RecordId</a></tt> struct.
+For example, in the above diagram, the <tt>RecordId</tt> of 
+the <font color="red">red record</font> 
+(the first record in the second page)
+is (pid=1, sid=0) meaning that its PageId is 1 and SlotId is 0.  <tt>RecordFile</tt> supports 
+the following file access API:
+</p><ul> 
+  <li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#08bfcd04311548f6ed9c4d45bf05b5cc">open()</a></tt>: 
+This function opens a file in the read or write mode. 
+When you open a non-existing file in the write mode, a file with the given name
+    is automatically created.
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#c14ea9a9fb37d9bbb90e310cf63145d8">close()</a></tt>: This function closes the file.
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#92b15d3dc6d72934ec28bf279794be92">read()</a></tt>: This function allows you to read the record at
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/struct_record_id.html">RecordId</a></tt> from the file. 
+    For example, if you want to read 
+the the <font color="red">red record</font> in the above diagram, 
+you will have to call <tt>read()</tt> with <tt>RecordId</tt> of pid=1 and sid=0. 
+ 
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#33df3f8e1d323a215844fe1b5b3e9232">append()</a></tt>: This function is used to insert a new record at the end of the file. 
+For the above example, if you call <tt>append()</tt> with a new record, it will be stored at <tt>RecordId</tt> pid=11 and sid=1. The location of
+the stored record is returned in the third parameter of this function.
+Note that <tt>RecordFile</tt> does not support updating or deleting an existing record.  You can only append a new record at the end.
+  </li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#d26a24a4060aa600b6bb64eb699f8656">endRid()</a></tt>:
+This function returns the RecordId immediately after the last
+    record in the file. 
+For instance, a call to <tt>endRid()</tt> in the above example will return a <tt>RecordId</tt> with pid=11 and sid=1.
+When <tt>endRid()</tt> returns {pid=0, sid=0}, it indicates that the RecordFile is empty. You can scan an entire RecordFile
+    by reading from RecordId with pid=0 and sid=0 through immediately before endRid().
+</li></ul> 
+ 
+<p>In Bruinbase, <tt>RecordFile</tt> is used to store tuples in a table. 
+(Internally, <tt>RecordFile</tt> uses its private member variable <tt>pf</tt>, which is an instance of <tt>PageFile</tt>, to store tuples in a page.)
+ 
+</p><p><b>SqlEngine</b>: The <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html">SqlEngine</a></tt> class (implemented
+in <tt>SqlEngine.h</tt> and <tt>SqlEngine.cc</tt>) takes user commands
+and executes them. 
+ 
+</p><ul> 
+<li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#c1ac4c9a9f64095df22fcf570c934769">run()</a></tt>: This function is called when Bruinbase starts.
+ This function waits
+for user commands, parses them, and calls 
+<tt>load()</tt> or <tt>select()</tt> 
+depending on the user command. When the user issues the QUIT command, the control is returned from this function.
+</li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#f1062201247bdddb5f9192ea250a1eef">load()</a></tt>: This function is called when the user issues the <tt>LOAD</tt> command. In Part A, you will have to implement this function to support loading tuples into a table from a load file.
+</li><li><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#0d5fd30bb53bb1146a0b9c209d43a2d8">select()</a></tt>: When the user issues the <tt>SELECT</tt> command, this function is called. The provided implementation scans all tuples in the table to compute the answer. Later in Part C, you will have to extend this function to use an index for more efficient query processing.
+</li></ul> 
+<b>BTreeIndex</b>: The <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_tree_index.html">BTreeIndex</a></tt> class implements the B+tree index.
+The provided source code only contains its API definition, so
+you will have to implement this class
+as Part B of this project.<p> 
+ 
+</p><p>Make sure that you clearly understand the basic architecture of Bruinbase and its API before you proceed to the next step.</p>
+
+<h2>Part A: Implement LOAD Command</h2>
+<p>In the first part of Project 2, you will be implementing the bulk load command, similar to the <code>LOAD DATA</code> command you used in MySQL for Project 1B. For Bruinbase, the syntax to load data into a table is:</p>
+<pre class="code">LOAD tablename FROM 'filename' [ WITH INDEX ]</pre>
+<p>This command creates a table named <code>tablename</code> and loads the (key, value) pairs from the file <code>filename</code>. If the option <tt>WITH INDEX</tt> is specified, Bruinbase also creates the index on the key column of the table. The format for the input file must be a single key and value pair per line, separated by a comma. The key must be an integer, and the value (a string) should be enclosed in double quotes, such as:</p>
+<p><code>1,"value 1"<br>
+	2,"value 2"<br>
+...</code></p>
+<p>Note that when the user issues a LOAD command, Bruinbase invokes
+the <code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#f1062201247bdddb5f9192ea250a1eef">SqlEngine::load(table, loadfile, index)</a></code> function with the user-provided table name and the load file name as its parameters. The third parameter is set to true if <tt>WITH INDEX</tt> option is specified. For example,
+if the user issues the command "LOAD movie FROM 'movieData.del'", 
+the first parameter <tt>table</tt> will be "movie", the
+second parameter <tt>loadfile</tt> will be "movieData.del",
+and the third parameter <tt>index</tt> will be false.
+Implement the <code>SqlEngine::load()</code> function to load tuples into the table from the load file. Since you have not implemented any indexes yet, you do not need to worry about the index creation part yet. For now, assume that the third parameter <tt>index</tt> will be always false and implement the load function. 
+
+</p><p>For reading the loadfile, you may use any standard C/C++ file I/O functions, like <tt>fstream</tt>, <tt>fgets</tt>, etc. For table storage, however, you must use the provided 
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html">RecordFile</a></tt>
+class. The created <tt>Recordfile</tt> should be named as tablename + ".tbl". For example, when the user issues the command "<code>LOAD movie FROM 'movieData.del'</code>", you should create a
+RecordFile named <code>movie.tbl</code> (in the current working directory) and store all tuples in the file.  If the file already exists, the <code>LOAD</code> command should append all records in the load file to the end of the table.  Roughly, your implementation of the <code>load</code> function should open the input loadfile and the RecordFile, parse each line of the loadfile to read a tuple
+(possibly using <a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#1fa4ab57b931adad1567102d5a9f8ac6">SqlEngine::parseLoadLine()</a>) and insert the tuple to the RecordFile.
+Note that for this part of the project, you can modify only the <tt>load()</tt> function of <tt>SqlEngine</tt>, not any other parts of the Bruinbase code. 
+
+</p><p>In bruinbase.zip, we have provided a sample data file <code>movie.del</code>, as well as a RecordFile <code>movie.tbl</code> loaded from the sample data file. As you will be using the <code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html">RecordFile</a></code> class for table storage, the table file created by your code from <code>movie.del</code> should be roughly the same as the one provided. You can verify if your load command is successful by comparing some query results between the two tables.</p>
+
+<p>Remember that, as you modify your code, you'll need to run <code>make</code> and rerun Bruinbase to witness any changes you've made. As you implement the <code>SqlEngine::load</code> function, you may find it helpful to use debugging tools such as <a href="http://oak.cs.ucla.edu/classes/cs143/project/gdb/">GDB</a>.</p>
+
+<p>The primary goal of Part A is to make sure that you (1) understand the Bruinbase code thoroughly and (2) feel comfortable with modifying the code as needed. Since our focus is not string parsing, you do not have to worry about possible variations in the input load file. During the testing of your code, we will use only "well-formed" load files that follow the spec, so as long as your code can correctly parse and load well-formed load files, you won't lose any points for this part of the project. The provided <tt>SqlEngine::parseLoadLine()</tt> is likely to be sufficient for your parsing need of the input load file.</p>
+
+<p><strong>Notes on CR/LF issue:</strong> Again, if your host OS is Windows, you need to pay particular attention to how each line of a text file ends. If you get some unexpected errors from make, flex, bison, or g++ during your build, make sure that this is not because of the CR/LF issue. 
+Run <tt>dos2unix</tt> from the guest OS on all files modified by a Windows program. </p>
+
+<p>Submit your work of Part A by the deadline.
+See the submission instructions at the bottom of the page to submit Part A.
+We emphasize that even though only Part A is due after one week, <b>you are STRONGLY encouraged to continue with Part B in the first week, because the rest of this project will be SIGNIFICANTLY more work than earlier projects.</b> We expect that Parts B and C will take at least 20 hours to complete even for the students with much C++ programming experience and significantly more for those with less experience. We have made Part A due in one week to ensure that everyone starts with this project early on, not to delay your work on Part B to the second week of this project.</p>
+
+<p>We also emphasize that while Project 2 is split into 4 submissions, the project is really a single project and will be graded <em>once</em> after all submissions are over. We have split the project into multiple submissions to encourage an early start, not because each part is a separate project that will be graded independently. In particular, 
+the final grading will be done by running a test script that requires that <strong>your code compiles, loads tuples, and executes queries</strong>. To get partial credit, it is of paramount importance that your submitted code
+works at least for some test cases provided at the end
+of this page. Even if you implement
+up to Part C perfectly, if you fail to submit a working version of Part D, we won't be able to give you partial credit because our script wouldn't work. Carefully plan ahead your schedule, so that you will be able to submit a <strong>WORKING VERSION FOR EVERY PART</strong> even if each part may not work for all cases.</p>
+
+<p></p><h2>Part B: Implement B+tree (part 1)</h2>
+
+<p>For Parts B and C of Project 2, you will be adding the B+tree indexing mechanism to Bruinbase.
+
+</p><h3>Overview of the Structure of B+tree in Bruinbase</h3>
+<p>If you are still not sure about how B+tree works, please go over the <a href="http://oak.cs.ucla.edu/cs143/slides/index.ppt">lecture slides on index</a> and Chapter 12.3 of the textbook to understand the search and insertion algorithms for B+tree. 
+Remember that Bruinbase only supports load and select, which means your index must support search and insertion, but deletion support is not required. </p>
+
+<p>Take a few minutes to read through  the <code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_tree_index.html">BTreeIndex</a></code> interface defined in <code>BTreeIndex.h</code> to get a sense of which member functions will handle the various tasks for record insertion and key lookup. 
+Here is an abstract diagram of the overall structure of B+tree that you will have to implement for Parts B and C.
+
+</p><p align="center"></p><div class="crop" align="center"><img src="./CS 143 Project_files/BruinbaseFileStructure.png" width="695" height="527" class="crop" alt=""></div>
+<ul>
+<li>In this diagram, one black rectangle corresponds to one disk page. In particular, every node in B+tree corresponds to a page in <tt>PageFile</tt>.
+</li><li>In B+tree, a PageId stored in a non-leaf node works as the "pointer" to a child node.
+  <ul>
+  <li>The last PageId in a leaf node of B+tree works as the pointer to its next sibling node.
+  </li></ul>
+</li><li>In B+tree, a RecordId stored in a leaf node works as a pointer to a record in a RecordFile.
+</li></ul>
+
+
+<p>The above diagram shows the minimum information that should be stored in the nodes, and you are welcome to add more information as necessary. As you see in the above diagram, <tt>PageId</tt> can be effectively used as a "pointer" to a page in a PageFile (and thus, to a node in B+tree) and <tt>RecordId</tt> can be used as a "pointer" to a record in a <tt>RecordFile</tt>. Note that all information of a B+tree is eventually stored in a <tt>PageFile</tt>, which is a member variable of <tt>BTreeIndex</tt>.</p>
+
+
+<p>The three most important methods in <tt>BTreeIndex</tt> are the following:</p>
+
+<pre class="code">  /**
+   * Insert (key, RecordId) pair to the index.
+   * @param key[IN] the key for the value inserted into the index
+   * @param rid[IN] the RecordId for the record being inserted into the index
+   * @return error code. 0 if no error
+   */
+  <b>RC insert(int key, const RecordId&amp; rid);</b>
+
+  /**
+   * Run the standard B+Tree key search algorithm and identify the
+   * leaf node where searchKey may exist. If an index entry with
+   * searchKey exists in the leaf node, set IndexCursor to its location 
+   * (i.e., IndexCursor.pid = PageId of the leaf node, and
+   * IndexCursor.eid = the searchKey index entry number.) and return 0. 
+   * If not, set IndexCursor.pid = PageId of the leaf node and 
+   * IndexCursor.eid = the index entry immediately after the largest 
+   * index key that is smaller than searchKey, and return the error 
+   * code RC_NO_SUCH_RECORD.
+   * Using the returned "IndexCursor", you will have to call readForward()
+   * to retrieve the actual (key, rid) pair from the index.
+   * @param key[IN] the key to find
+   * @param cursor[OUT] the cursor pointing to the index entry with 
+   *                    searchKey or immediately behind the largest key 
+   *                    smaller than searchKey.
+   * @return 0 if searchKey is found. Othewise, an error code
+   */
+  <b>RC locate(int searchKey, IndexCursor&amp; cursor);</b>
+
+  /**
+   * Read the (key, rid) pair at the location specified by the IndexCursor,
+   * and move foward the cursor to the next entry.
+   * @param cursor[IN/OUT] the cursor pointing to an leaf-node index entry in the b+tree
+   * @param key[OUT] the key stored at the index cursor location
+   * @param rid[OUT] the RecordId stored at the index cursor location
+   * @return error code. 0 if no error
+   */
+  <b>RC readForward(IndexCursor&amp; cursor, int&amp; key, RecordId&amp; rid);</b>
+</pre>
+
+<p>Perhaps the best way to understand what each method of <tt>BTreeIndex</tt>
+should do is to trace what <tt>SqlEngine</tt> will have
+to do when a new tuple (10, 'good') is inserted. 
+<!-- Since a B+tree does
+not store the entire tuple (it only stores key and pointer pair), the
+tuple should be stored safely somewhere for later retrieval. -->
+As you implemented in Part A, <tt>SqlEngine</tt>
+stores the tuple in <tt>RecordFile</tt> by calling
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#33df3f8e1d323a215844fe1b5b3e9232">RecordFile::append()</a></tt> with (10, 'good'). When append() finishes, it returns the location
+of the inserted tuple as the third parameter <tt>RecordId</tt>. Let us say the returned <tt>RecordId</tt> is [3,5] 
+(i.e., pid=3 and sid=5). Now that your tuple is stored
+in <tt>RecordFile</tt> at [3,5], <tt>SqlEngine</tt> needs to insert the tuple's key and the "pointer" to the tuple (i.e., its <tt>RecordId</tt> [3,5])
+into the B+tree. That is, <tt>SqlEngine</tt> will have to call
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_tree_index.html#c2a0837aff1b01c1a566c013b917d7eb">BTreeIndex::insert()</a></tt>
+ with the parameter (10, [3,5]), where 10 is the
+key of the inserted tuple and [3,5] is the tuple's location in
+<tt>RecordFile</tt>. Given this input, 
+<tt>BTreeIndex::insert()</tt> should traverse
+the current B+tree, insert the (10, [3,5]) pair into a leaf node
+and update its parent node(s) if necessary.</p>
+
+<p>Later, when <tt>SqlEngine</tt> wants to retrieve the tuple with key=10 (let us say, the user issued the query <tt>SELECT * FROM table WHERE key=10</tt>), it will
+call <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_tree_index.html#6711c8e7d78f94e3dd8cf77560382517">BTreeIndex::locate()</a></tt> with the key value 10. Then your B+tree
+implementation will have to traverse the tree and return the 
+location of the appropriate leaf-node index entry as <tt>IndexCursor</tt>.
+Using the returned <tt>IndexCursor</tt>, <tt>SqlEngine</tt> then calls <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_tree_index.html#dd5af9cb48e21a2f0ee62bc306aca329">BTreeIndex::readForward()</a></tt>
+to retrieve (10, [3,5]). Finally
+using the returned <tt>RecordId</tt> [3,5], <tt>SqlEngine</tt> calls 
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_record_file.html#92b15d3dc6d72934ec28bf279794be92">RecordFile::read()</a></tt>
+and retrieves the tuple (10, 'good') stored at [3,5].</p>
+
+<p>As you implement the index, remember that you may <b>NOT</b> use standard file I/O. Instead, you <b>MUST</b> use <code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html">PageFile</a></code> to store and access the index, where each node in the B+tree corresponds to one page in <code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html">PageFile</a></code>. 
+
+</p><h3>Implement B+tree node insertion and search algorithms</h3>
+
+<p>As the first step to implementing B+tree, you have to write the code
+for managing individual nodes of the B+tree (both leaf and non-leaf
+nodes). To help you identify what functionalities B+tree nodes
+should support, we have included a sample interface definition for
+<tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_t_leaf_node.html">BTLeafNode</a></tt>
+and <tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_t_non_leaf_node.html">BTNonLeafNode</a></tt> classes in the <tt>BTreeNode.h</tt> header file.</p>
+
+<p><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_t_leaf_node.html">BTLeafNode</a></tt> is the C++ class that supports insert, split, search, and retrieval of index entries from a leaf node of a B+tree:
+</p><pre class="code">/**
+ * BTLeafNode: The class representing a B+tree leaf node.
+ */
+class BTLeafNode {
+  public:
+   /**
+    * Read the content of the node from the page pid in the PageFile pf.
+    * @param pid[IN] the PageId to read
+    * @param pf[IN] PageFile to read from
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC read(PageId pid, const PageFile&amp; pf);</b>
+
+   /**
+    * Write the content of the node to the page pid in the PageFile pf.
+    * @param [IN] the PageId to write to
+    * @param [IN] PageFile to write to
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC write(PageId pid, PageFile&amp; pf);</b>
+
+   /**
+    * Insert the (key, rid) pair to the node.
+    * Remember that all keys inside a B+tree node should be kept sorted.
+    * @param key[IN] the key to insert
+    * @param rid[IN] the RecordId to insert
+    * @return 0 if successful. Return an error code if the node is full.
+    */ 
+    <b>RC insert(int key, const RecordId&amp; rid);</b>
+   
+   /**
+    * Insert the (key, rid) pair to the node
+    * and split the node half and half with sibling.
+    * The first key of the sibling node is returned in siblingKey.
+    * Remember that all keys inside a B+tree node should be kept sorted.
+    * @param key[IN] the key to insert.
+    * @param rid[IN] the RecordId to insert.
+    * @param sibling[IN] the sibling node to split with. 
+    *         This node MUST be EMPTY when this function is called.
+    * @param siblingKey[OUT] the first key in the sibling node after split.
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC insertAndSplit(int key, const RecordId&amp; rid, BTLeafNode&amp; sibling, int&amp; siblingKey);</b>
+   
+   /**
+    * If searchKey exists in the node, set eid to the index entry
+    * with searchKey and return 0. If not, set eid to the index entry
+    * immediately after the largest index key that is smaller than searchKey,
+    * and return the error code RC_NO_SUCH_RECORD.
+    * Remember that keys inside a B+tree node are always kept sorted.
+    * @param searchKey[IN] the key to search for.
+    * @param eid[OUT] the index entry number with searchKey or immediately
+                      behind the largest key smaller than searchKey.
+    * @return 0 if searchKey is found. If not, RC_NO_SEARCH_RECORD.
+    */
+    <b>RC locate(int searchKey, int&amp; eid);</b>
+   
+   /**
+    * Read the (key, rid) pair from the eid entry.
+    * @param eid[IN] the entry number to read the (key, rid) pair from
+    * @param key[OUT] the key from the entry
+    * @param rid[OUT] the RecordId from the entry
+    * @return 0 if successful. Return an error code if there is an error.
+    */ 
+    <b>RC readEntry(int eid, int&amp; key, RecordId&amp; rid);</b>
+   
+   /**
+    * Return the PageId of the next sibling node.
+    * @return PageId of the next sibling node
+    */ 
+    <b>PageId getNextNodePtr();</b>
+
+   /**
+    * Set the PageId of the next sibling node.
+    * @param pid[IN] the PageId of the sibling node.
+    * @return 0 if successful. Return an error code if there is an error.
+    */ 
+    <b>RC setNextNodePtr(PageId pid);</b>
+
+   /**
+    * Return the number of keys stored in the node.
+    * @return the number of keys in the node
+    */
+    <b>int getKeyCount();</b>
+
+ private:
+   /**
+    * The main memory buffer for loading the content of the disk page 
+    * that contains the node.
+    */
+    char buffer[PageFile::PAGE_SIZE];
+};
+</pre>
+<p>Remember that each node in a B+tree has to be eventually written to and read from the disk as a page in <code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_page_file.html">PageFile</a></code>. <!-- Again, a page in a PageFile is simply a 1024 byte block in the disk (the page size is defined by <tt>PageFile::PAGE_SIZE</tt>).  -->
+When you access a B+tree for traversal or insertion, you will first have to read the corresponding disk pages into main memory, since you cannot manipulate the node directly inside the disk. Therefore, for each B+tree node that you access, you will need 1024-byte main memory to "load" the content of the node from the disk. 
+<!-- There are a number of different approaches that you can take for this. One possible approach is to add --> The 1024-byte-array member variable, <tt>buffer</tt>, of <tt>BTLeafNode</tt> can be used for this, but you are welcome to take a different approach and modify the class definition.</p>
+
+<p>Once the page for a node is read into the main memory (of size 1024 bytes), your code will have to read and store keys, RecordIds, and PageIds inside the main memory using pointers and typecasting operators. If you are not comfortable with arrays and pointers in C++, you may find it useful to review the <a href="http://www.cplusplus.com/doc/tutorial/pointers.html">C++ Pointer Tutorial</a>. Pay particular attention to the sections on arrays and pointer arithmetic.</p>
+
+<p>Since you will be doing lots of pointer-based memory access, you are likely to encounter memory-related bugs. These bugs are known to be very difficult to fix, since the place that you introduce the bug is often different from where you observe an unexpected behavior. There is an excellent memory-related debugging tool called <tt>valgrind</tt>. If you run your program in valgrind, it gives you a warning immediately where an out-of-bound or uninitialized memory access occurs. It gives you warning for memory leaks as well. You can run your program in valgrind by typing "<tt>valgrind</tt> <i>your_program_name</i>".  See <a href="http://valgrind.org/docs/manual/QuickStart.html">Valgrind Quick Start Guide</a> to learn how to use it.</p>
+
+<p>The leaf nodes of your index have to store (<code>key</code>, <code>RecordId</code>) pairs that are provided as the input parameters of 
+<tt>BTLeafNode::insert()</tt>. 
+Since these pairs will essentially be provided by <tt>SqlEngine</tt>, 
+you do not have to worry about where these values come from
+for this part of the project. 
+For now, all you have to do is to store the (<code>key</code>, <code>RecordId</code>) pair at the node, and when the user tries to <tt>locate</tt> the <tt>searchKey</tt> from the node, return the corresponding entry number. (More precisely, the first entry whose key is larger than or equal to searchKey.) You may also assume that there will be <b>no duplicate key value</b> inserted into a node.  Finally, in your implementation, <b>each leaf node MUST be able to store at least 70 keys</b>.</p>
+
+<p>We emphasize that we provide the the above class definition just as a hint on what functionalities your B+tree leaf nodes should support. You are welcome to modify the class definition if a different interface is more suitable for your coding style. Feel free to add extra member functions and variables to the class as necessary.</p>
+
+
+<p><tt><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_b_t_non_leaf_node.html">BTNonLeafNode</a></tt> is the C++ class that supports insert, split, and search mechanisms for 
+non-leaf nodes of B+tree.
+</p><pre class="code">/*
+ * BTNonLeafNode: The class representing a B+tree nonleaf node.
+ */
+class BTNonLeafNode {
+  public:
+   /**
+    * Read the content of the node from the page pid in the PageFile pf.
+    * @param pid[IN] the PageId to read
+    * @param pf[IN] PageFile to read from
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC read(PageId pid, const PageFile&amp; pf);</b>
+
+   /**
+    * Write the content of the node to the page pid in the PageFile pf.
+    * @param [IN] the PageId to write to
+    * @param [IN] PageFile to write to
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC write(PageId pid, PageFile&amp; pf);</b>
+
+   /**
+    * Insert the (key, pid) pair to the node.
+    * Remember that all keys inside a B+tree node should be kept sorted.
+    * @param [IN] the key to insert
+    * @param [IN] the PageId to insert
+    * @return 0 if successful. Return an error code if the node is full.
+    */
+    <b>RC insert(int key, PageId pid);</b>
+
+   /**
+    * Insert the (key, pid) pair to the node
+    * and split the node half and half with sibling.
+    * The middle key after the split is returned in midKey.
+    * Remember that all keys inside a B+tree node should be kept sorted.
+    * @param key[IN] the key to insert
+    * @param pid[IN] the PageId to insert
+    * @param sibling[IN] the sibling node to split with. This node MUST be empty when this function is called.
+    * @param midKey[OUT] the key in the middle after the split. This key should be inserted the parent node.
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC insertAndSplit(int key, PageId pid, BTNonLeafNode&amp; sibling, int&amp; midKey);</b>
+
+   /**
+    * Given the searchKey, find the child-node pointer to follow and
+    * output it in pid.
+    * @param searchKey[IN] the searchKey that is being looked up.
+    * @param pid[OUT] the pointer to the child node to follow.
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC locateChildPtr(int searchKey, PageId&amp; pid);</b>
+
+   /**
+    * Initialize the root node with (pid1, key, pid2).
+    * @param pid1[IN] the first PageId to insert
+    * @param key[IN] the key that should be inserted between the two PageIds
+    * @param pid2[IN] the PageId to insert behind the key
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    <b>RC initializeRoot(PageId pid1, int key, PageId pid2);</b>
+
+   /**
+    * Return the number of keys stored in the node.
+    * @return the number of keys in the node
+    */
+    <b>int getKeyCount();</b>
+
+ private:
+   /**
+    * The main memory buffer for loading the content of the disk page 
+    * that contains the node.
+    */
+    char buffer[PageFile::PAGE_SIZE];
+};
+</pre>
+<p>Note that in principle the structure of a non-leaf node is different from that of a leaf node. In particular, you need to maintain (key, RecordId) pairs for a leaf node, but it is sufficient to store only (key, PageId) pairs for a non-leaf node<!-- because a non-leaf node points just to its child nodes, not a particular entry in the nodes-->. Despite this difference, you may decide to 
+use the same structure for both leaf and non-leaf nodes and ignore the sid field of RecordId for non-leaf nodes. This way, you may simplify your implementation 
+and share some code between the implementation of the two node types. (While this implementation is a reasonable choice, it will reduce the branching factor of your tree and make your B+tree less efficient.) Whatever you decide,
+<b>each non-leaf node MUST be able to store at least 70 keys</b>.</p>
+
+<p>Again, you are welcome to change the class definitions for B+tree non-leaf nodes if you find it helpful; you can change function names and their input parameters and add or drop some functions as necessary. It is OK to even merge the two class defintions, <tt>BTLeafNode</tt> and <tt>BTNonLeafNode</tt>, into one class, say <tt>BTreeNode</tt>, so that you can share code more easily between leaf and nonleaf nodes. Another option is to derive the leaf and nonleaf node classes from a common parent class using inheritance. Whatever you decide, keep in mind that only <tt>BTreeNode.h</tt> and <tt>BTreeNode.cc</tt> files can be modified for Part B.</p>
+
+<p>Submitting correct implementation for Part B will be essential to get reasonable grade for Project 2, so try to thoroughly test your code from Part B in isolation before moving on to Part C. (You will have a chance to resubmit your code for <tt>BTreeNode</tt> later if you want to, but you may get penalty if there are substantial changes.) You may find it useful to implement helper or debugging functions, such as a print function to show the contents of a B+tree node. Such functions are not required, but you may find them helpful to visualize and verify the node structure as you are developing. During your testing, you can use our Makefile and simply execute the "make" command to build your testing program, which will help you avoid any dependency error. Keep in mind the incremental development practices and unit testing you learned in CS31 and CS32.</p>
+
+<p></p><h2>Part C: Implement B+tree (part 2)</h2>
+Now that you finished your implementation of individual B+tree nodes,
+it is time to implement the B+tree insert and search mechanisms. Go
+over the comments in <tt>BTreeIndex.h</tt>, understand what each
+method should do, and implement them. To simplify your code,
+you may assume that <b>no duplicate key values</b> will be inserted into
+the tree.
+
+<p>We strongly recommend you implement the three functions <tt>insert()</tt>, <tt>locate()</tt>, and <tt>readForward()</tt> of <tt>BTreeIndex</tt> as they are defined in <code>BTreeIndex.h</code>. You are welcome to add additional helper functions and private member variables to <tt>BTreeIndex</tt>, but if you need to change the definitions of the three functions, contact the TA and get an explicit approval. Regardless, only
+<tt>BTreeIndex.h</tt> and <tt>BTreeIndex.cc</tt> 
+files can be modified for Part C. If you need to define additoinal classes, structures and functions, add your code to one of these two files.</p>
+
+<p><strong>Hints on B+tree implementation:</strong> 
+
+</p><ul>
+<li>As you traverse down the tree for index lookup, you need to know whether you have reached the leaf level of the tree. There are a number of ways to do this. One possible option is to "save" the height of the tree somewhere, keep track of how many levels of the tree you have traversed down during index lookup, and compare these two numbers to see whether you have reached the leaf level. Another possibility is to add a special "flag" to each node to indicate whether the node is a leaf node or not.
+</li><li>When you insert a new entry into a leaf-node, the node may overflow and a new (key, pointer) pair needs to be inserted into its parent. Since B+tree does not maintain pointers to parent nodes, your code essentially has to "keep track of" the sequence of the nodes that you visit as you traverse down the tree, so that you can get the parent node when needed. This can be done either using recursive algorithm or by explicitly storing the page ids of the visited nodes somewhere.
+</li><li>We strongly suggest that you implement your B+ tree operations using recursive algorithms. Although you may find it somewhat difficult to understand these algorithms at first, using a recursive approach will greatly simplify your coding task.
+</li><li>Pay attention to what is stored in the main memory and what is stored in the disk. For example, any member variable of the <code>BTreeIndex</code> class (e.g., <tt>rootPid</tt>) is <b>NOT</b> stored in the disk and the value will be lost when you restart Bruinbase. If you want to store some information "permanently", you have to make sure that it is stored in the disk (possibly as part of your index file).
+</li></ul>
+
+<p>Again, we suggest implementing helper or debugging functions, such as a print function to show the contents of a B+tree tree, even though they are not required. You will find them helpful to visualize and verify the B+tree structure as you are developing. Apply the incremental development practices and unit testing approach. Thoroughly test your code from Parts B and C in isolation before moving on to Part D. Remember that <tt>gdb</tt> and <tt>valgrind</tt> are your friends if you encounter unexpected errors from your code.</p>
+
+<p>Submit your implementation of <tt>BTreeIndex</tt> before the deadline for Part C. For Part C submission, you may find it necessary to change your code for <tt>BTreeNode</tt> due to minor bugs or changes in your design. It is OK to resubmit your new code for <tt>BTreeNode</tt> as part of this submission, but the changes to <tt>BTreeNode</tt> should be minimal. In particular, the resubmitted code should share at least 50% of the lines with your earlier submission (when measured by <tt>diff</tt>). Changes to more than 50% of the lines will lead up to 5% penalty for Part B.</p>
+
+<h2>Part D: Modify SqlEngine</h2>
+<p>In the final part of the project, you will be modifying the main Bruinbase SQL engine to make use of your indexing code. This will involve augmenting the 
+<code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#f1062201247bdddb5f9192ea250a1eef">SqlEngine::load()</a></code> 
+function to generate an index for the table, and the 
+<code><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#0d5fd30bb53bb1146a0b9c209d43a2d8">SqlEngine::select()</a></code> 
+function to make use of your index at query time.</p>
+
+<ul>
+<li><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#f1062201247bdddb5f9192ea250a1eef"><strong>SqlEngine::load(const string&amp; table, const string&amp; loadfile, bool index)</strong></a><br> 
+You will need to change the load function you implemented in Part A so that if the third parameter <tt>index</tt> is set to true, Bruinbase creates the corresponding B+tree index on the key column of the table. The index file should be named 'tblname.idx' where tblname is the name of the table, and created in the current working directory. Essentially, you have to change the load function, such that if <tt>index</tt> is <tt>true</tt>, for every tuple inserted into the table, you obtain <tt>RecordId</tt> of the inserted tuple, and insert a corresponding (<tt>key</tt>, <tt>RecordId</tt>) pair to the B+tree of the table.
+
+</li><li><a href="http://oak.cs.ucla.edu/classes/cs143/project/bruinbase/doc/class_sql_engine.html#0d5fd30bb53bb1146a0b9c209d43a2d8">
+<strong>SqlEngine::select (int attr, const string &amp;table, const vector&lt;SelCond&gt; &amp;conds)</strong></a><br>
+The <tt>select()</tt> function is called when the user issues the SELECT command. The attribute in the SELECT clause is passed as the first input parameter <tt>attr</tt> (<tt>attr=1</tt> means "key" attribute, <tt>attr=2</tt> means "value" attribute, <tt>attr=3</tt> means "*", and <tt>attr=4</tt> means "COUNT(*)"). The table name in the FROM clause is passed as the second input parameter <tt>table</tt>. The conditions listed in the WHERE clause are passed as the input parameter <tt>conds</tt>, which is a vector of <tt>SelCond</tt>, whose definition is as follows:
+<pre class="code">struct SelCond {
+  int attr;       // 1 means "key" attribute. 2 means "value" attribute.
+  enum Comparator { EQ, NE, LT, GT, LE, GE } comp;
+  char* value;    // the value to compare
+};
+</pre>
+For example, for a condition like "key &gt; 10", <tt>SqlEngine</tt> will pass
+a <tt>SelCond</tt> with "attr = 1, comp = GT, and value = '10'".
+
+<p>The current implementation of <tt>select()</tt> performs a scan across the entire table to answer the query. Your last task will be to modify this behavior of <tt>select()</tt> to meet the following requirements:</p>
+<ul>
+	<li>If a SELECT query has one or more conditions on the key column and if the table has a B+tree, use the B+tree to help answer the query as follows:
+	<ul>
+	<li>If there exists an equality condition on key, you should always use the equality condition in looking up the index.
+	</li><li>Queries which specify a range (like key &gt;= 10 and key &lt; 100) must use the index. <tt>SqlEngine</tt> should try to avoid retrieving the tuples outside of this range from the underlying table by using the index.
+	</li><li>You should not to use an inequality condition <tt>&lt;&gt;</tt> on key in looking up the B+tree.
+  </li><li>You should avoid unnecessary page reads of getting information about the "value" column(s); for example, if ONLY "key" column(s) exist in a SELECT statement, or if travesing leaf nodes on B+tree returns the count(*). </li>
+  <li>As a rule of thumb, <strong>you should avoid unecessary page reads if queries can be answered throgh the information stored in the nodes of a B+ Tree</strong>. </li>
+	</ul>
+	</li><li>Query result sets using the index must be equivalent to when using no index. Any ordering of output tuples is OK.
+	</li><li>Your implementation should print out only the result tuples (and the performance numbers). No other (debugging) information should be printed either to the standard output or to the standard error.</li>
+</ul>
+</li></ul>
+
+<p>While doing this part of this project, please remember that <b>YOU SHOULD NEVER CHANGE THE DEFINITIONS OF SqlEngine::load() AND SqlEngine::select()</b>. Our testing and grading script assumes the current API of these two functions, so if you change them, you are likely to get zero score for the entire project 2! You are allowed to change only their implementation, not their interface.
+
+</p><p>Adding indexing support to the query engine should noticeably improve  performance, particularly for  queries specifying very few tuples (e.g. SELECT * FROM Movie WHERE key = 2997). For small data sets, the running time may not differ significantly, but the number of pages read should give an indication of how much improvement your index is providing. Make sure you adequately test your implementation by issuing load and several different types of select statements. Compare the time and number of pages read for  queries both with and without
+indexing and make sure that there is noticeable difference.</p>
+
+
+<p>To help you test your code and ensure that you will get at least some partial credit for your work, here are a few <a href="http://oak.cs.ucla.edu/classes/cs143/project/project2-test.zip">sample tests</a> for your bruinbase code. Extract with 
+</p><pre class="code">$ unzip project2-test.zip
+</pre>
+
+<p>Included are 5 sample data files, a shell script, an sql script, and
+the expected output.  The test files are created such that they
+test incrementally more complex cases of B+tree.
+In particular, below is what case they should be testing
+(these are assuming you used a reasonably large n value; in your implementation, you should assign a reasonably large n):
+
+</p><ul>
+<li>xsmall: 8 tuples (single node b+tree, single-page table)
+</li><li>small: 50 tuples (single node b+tree, multiple-page table)
+</li><li>medium: 100 tuples (two-level b+tree, only one split at leaf)
+</li><li>large: 1000 tuples (two-level b+tree, multiple splits at leaf)
+</li><li>xlarge: 12000+ tuples (three-level b+tree) 
+</li></ul>
+
+<p>
+You will get partial credit if your submission handles at least one
+of the test cases correctly. For example, even if your code does not handle node overflow and split cases correctly, your code should work at least for the <tt>xsmall</tt> and <tt>small</tt> datasets. Please note that these are just a sample, and by no means 
+exhaustive testing.  You will
+need to test several other queries to make sure you're performance is
+improving over the non-indexed select where expected.  Passing these
+tests is a good sign, but does not guarantee a perfect score during the
+actual grading.
+Note that your submission will be graded primarily based on correctness. You will get full credit if your code produces correct results for all queries, as long as your code shows reasonable performance improvement from full table scan. The performance numbers in the sample output from our test cases are just examples, so your code does not have to match or exceed them.
+
+
+
+</p><p>Submit your implementation of <tt>SqlEngine</tt> before the final deadline. If you have to change your code for <tt>BTreeIndex</tt> or <tt>BTreeNode</tt> for Part D submission, you are allowed to resubmit them, but the changes should be minimal. If there is more than 50% change in your earlier code, you will get up to 5% penalty for the resubmitted parts.</p>
+
+<h2>Special Reminders:<a name="reminders"></a></h2>
+<ul>
+  <li>Nodes in B+tree should be never too empty. For example, the minimum key in non-leaf nodes should be "ceiling(n/2)-1", where (here) n is the max # of pointers in a node.</li>
+  <li>Note that we are mainly testing your "B+Tree" index implementation. Thus, even though your work might return the correct results of a testing query, you may still get no point for that testing case if your implementation of B+Tree is wrong. For example, your results come from directly scanning the entire record file, when the query should be handled through the help of the index.</li>
+  <li>
+  Third-party libraries:
+  <ul>
+    <li>
+    You can <strong>NOT</strong> ask TA to "install" any third-party library for you to run your code in your README. You work should be runnable without the premise of installing any additional library. 
+    </li>
+    <li>
+    It is okay to use STL but you have to be careful about how these will be actually stored in disks. In general we discourage you from using other libraries because they are often not needed. 
+    </li>
+    <li>
+    You may use another library that is pre-installed in the virtual machine, but you have to justify your cause. Please email TA your justifications in advance to get an approval.    
+    If you believe some library is needed for your implementation, please justify (1) "why" those usage are necessary (or better choices) and (2) where (roughly) you plan to use them.
+    </li>
+    <li>
+    Please be aware that the B+Tree itself is a low-level data structure. And you have to implement requirements (in particular, B+Tree algorithms) specified in this page on your own, including but not limited to node insertion and splitting. You <b>cannot</b> use any existing/third-party library to offload these tasks. 
+    </li>
+  </ul>
+  </li>
+</ul>
+
+<h2>Submission Instruction</h2>
+	<h3>Preparing Your Submission</h3>
+<p>
+Please create <b>a folder named as your UID</b>. Put all your source code files (including Makefile) and your README file into the UID folder. Compress your UID folder into a single zip file called "<b>P2.zip</b>". In summary, your zip file should have the following structure.
+</p><pre class="code">P2.zip
+ |
+ +- Folder named with Your UID, like "904200000" (without quotes)
+     |
+     +- readme.txt (your README file)
+     |
+     +- team.txt (your teaminfo file)
+     |
+     +- Makefile (project Makefile)
+     |
+     +- Bruinbase.h, main.cc, SqlParse.y, ... (all your project source files)
+</pre>
+
+<h3>What to Submit</h3>
+<p>For each of the four submission deadlines, your <b>P2.zip</b> file should have the <tt>Makefile</tt>, all source files, and <tt>readme.txt</tt> file. Your submitted code should compile without any error. You can change the following files in each submission:</p><ul type="disc">
+    <li><strong>For part A</strong>, only <code>SqlEngine.cc</code> should have been modified from our original files in your submission.</li>
+    <li><strong>For part B</strong>, only <code>SqlEngine.cc</code>, <code>BTreeNode.h</code> and <code>BTreeNode.cc</code> should have been modified from our original files in your submission.</li>
+    <li><strong>For part C</strong>, only <code>SqlEngine.cc</code>, <code>BTreeNode.h</code>, <code>BTreeNode.cc</code>, <code>BTreeIndex.h</code> and <code>BTreeIndex.cc</code> should have been modified from our original files in your submission.</li>
+    <li><strong>For part D</strong>, all source files that are neceesary for compilation and execution of your code.</li>
+    <li><code><b>team.txt</b></code>: A plain-text file (no word or PDF, please) that contains the UID(s) of every member of your team. If you work alone, just write your UID (e.g. 904200000). <br> If you work with a partner, write both UIDs separated by a comma (e.g. 904200000, 904200001). <b>Do not include any other content in this file!</b></li>
+
+    <li>A README file that includes:
+      <ul>
+        <li>apart from things in our spec, if you decide to made an improvement to reduce(optimize) the number of page reads, please provide a list of your optimizations. 
+            In general, for every item in the list, a brief statement plus an example is sufficient. If things are debatable, please provide your justification(s). 
+            (*You could skip this part if you do ONLY things asked in this spec.)
+        </li>
+        <li>your email and your partner's name and email.
+        </li>
+        <li>
+            any information you think is useful.
+        </li>
+      </ul>
+    </li>
+</ul>
+
+
+
+
+<h3>Testing of Your Submission</h3>
+Grading is a difficult and time-consuming process,
+and file naming and packaging convention is very important to test your submission without any error.
+In order to help you ensure the correct packaging of your submission, you can test your packaging by downloading this <a href="http://oak.cs.ucla.edu/classes/cs143/project/p2_test">test script</a>.
+In essence, this script unzips your submission to a temporary directory and tests whether or not you have included all your submission files.
+The script for Project 2 can be executed like:
+<pre class="code">cs143@cs143:~$ ./p2_test &lt;Your UID&gt;
+</pre>
+(Put your P2.zip file in the same directory with this test script, you may need to use "chmod +x p2_test" if there is a permission error).
+
+<p>You <b>MUST</b> test your submission using the script before your final submission to minimize the chance of an unexpected error during grading.
+Again, significant points may be deducted if the grader encounters an error
+during grading.When evertything runs properly, you will see an output similar to the following from this script:</p><pre class="code">Everything seems OK. Please upload your P2.zip file to CCLE.</pre>
+
+
+
+
+	<h3>Submitting Your Zip File</h3>
+	<p>Visit the Project 2 Submission page on CCLE and submit your "P2.zip" file electronically by the deadline of each part.  Note that if you accidentally submit a wrong file, you can always fix it by resubmiting your zip file before the deadline.
+
+</p><p>In order to accomodate the last minite snafu during submission, you will have 30-minute window after the deadline to finish your submission process. That is, as long as you start your submission before the deadline and complete within 30 minutes after the deadline, we won't deduct your grade period without any penalty. </p>
+
+
+<p>While Project 2 is split into 4 submissions, the project will be graded <em>once</em> after all submissions are over. 
+The final grading will be done by running a number of test cases to evaluate the correctness of your implementation. Since our testing script requires that your code compiles without any error and can load tuple and execute select queries, it is of paramount importance that you submit
+a working version of your code to get non-zero score for the project. 
+Carefully plan ahead your schedule, so that you will be able to submit a working version for each part.
+To get partial credit, it is better to submit <em>all parts</em> that work in some test cases than to submit only a subset of the parts that are supposed to work in all cases.  Make sure that the files you submit compile, build,
+and work fine without any changes to any of the other original files.
+
+
+        </p><h4>Late Submission Policy</h4>
+                <p>To accommodate the emergencies that
+                students may encounter, each team has 4-day grace period for late submission.
+                The grace period can be used for any part of the project 
+in the unit of one day.
+For example, a student may use 1-day grace period for Project 1A and 2-day      
+                grace period for Project 2B. 
+Note that even if a team submits a project 12 hours
+                late, they would need to use a full day grace period to avoid late penalty.
+                If your project is submitted late, we will automatically use the available
+                days in your grace period unless you specifically mention otherwise in the
+                README file.</p>
+
+
+</body></html>
